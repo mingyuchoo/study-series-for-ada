@@ -1,0 +1,7 @@
+name = "counter_domain"
+description = "Pure SPARK counter domain rules"
+version = "0.1.0-dev"
+authors = ["MINGYUCHOO"]
+maintainers = ["MINGYUCHOO <mingyuchoo@gmail.com>"]
+licenses = "custom-MINGYUCHOO-Personal-Use"
+project-files = ["counter_domain.gpr"]

@@ -1,0 +1,18 @@
+with "counter_application.gpr";
+with "gwindows.gpr";
+
+project Counter_Windows is
+   for Source_Dirs use ("src", "src/adapters");
+   for Object_Dir use "obj";
+   for Exec_Dir use "bin";
+   for Main use ("counter_windows.adb");
+   for Create_Missing_Dirs use "True";
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2022");
+   end Compiler;
+
+   package Linker is
+      for Default_Switches ("Ada") use ("-mwindows");
+   end Linker;
+end Counter_Windows;

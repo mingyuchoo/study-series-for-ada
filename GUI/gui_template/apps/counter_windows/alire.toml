@@ -1,0 +1,21 @@
+name = "counter_windows"
+description = "Ada desktop counter template (counter_windows)"
+version = "0.1.0-dev"
+authors = ["MINGYUCHOO"]
+maintainers = ["MINGYUCHOO <mingyuchoo@gmail.com>"]
+licenses = "custom-MINGYUCHOO-Personal-Use"
+executables = ["counter_windows"]
+project-files = ["counter_windows.gpr"]
+
+[[depends-on]]
+counter_application = "~0.1.0"
+
+[[pins]]
+counter_application = { path = "../../packages/counter_application" }
+
+[[depends-on]]
+gwindows = "~1.5.4"
+
+[available.'case(os)']
+windows = true
+'...' = false

@@ -1,0 +1,14 @@
+name = "counter_tk"
+description = "Ada desktop counter template (counter_tk)"
+version = "0.1.0-dev"
+authors = ["MINGYUCHOO"]
+maintainers = ["MINGYUCHOO <mingyuchoo@gmail.com>"]
+licenses = "custom-MINGYUCHOO-Personal-Use"
+executables = ["counter_tk"]
+project-files = ["counter_tk.gpr"]
+
+[[depends-on]]
+counter_application = "~0.1.0"
+
+[[pins]]
+counter_application = { path = "../../packages/counter_application" }

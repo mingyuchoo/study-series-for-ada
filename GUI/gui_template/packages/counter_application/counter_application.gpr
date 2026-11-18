@@ -1,0 +1,13 @@
+with "counter_domain.gpr";
+
+library project Counter_Application is
+   for Source_Dirs use ("src");
+   for Object_Dir use "obj/library";
+   for Library_Dir use "lib";
+   for Library_Name use "counter_application";
+   for Create_Missing_Dirs use "True";
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2022", "-gnata");
+   end Compiler;
+end Counter_Application;

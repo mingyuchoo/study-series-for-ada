@@ -1,0 +1,7 @@
+alire/
+alire.lock
+bin/
+config/
+obj/
+lib/
+gnatprove/

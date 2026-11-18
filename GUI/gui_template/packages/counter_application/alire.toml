@@ -1,0 +1,13 @@
+name = "counter_application"
+description = "Pure SPARK counter use cases"
+version = "0.1.0-dev"
+authors = ["MINGYUCHOO"]
+maintainers = ["MINGYUCHOO <mingyuchoo@gmail.com>"]
+licenses = "custom-MINGYUCHOO-Personal-Use"
+project-files = ["counter_application.gpr"]
+
+[[depends-on]]
+counter_domain = "~0.1.0"
+
+[[pins]]
+counter_domain = { path = "../counter_domain" }

@@ -1,0 +1,13 @@
+with "counter_application.gpr";
+
+project Counter_Tests is
+   for Source_Dirs use ("tests");
+   for Object_Dir use "obj/tests";
+   for Exec_Dir use "bin";
+   for Main use ("test_counter.adb");
+   for Create_Missing_Dirs use "True";
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2022", "-gnata");
+   end Compiler;
+end Counter_Tests;
