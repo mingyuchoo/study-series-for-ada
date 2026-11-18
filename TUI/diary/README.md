@@ -19,6 +19,26 @@ alr run --args="--data-dir /tmp/my-diary"
 ./bin/diary --help
 ```
 
+포맷팅부터 실행까지 한 번에 수행하려면 GNATformat을 설치하고 아래 스크립트를 사용합니다.
+
+```bash
+alr install gnatformat_bin
+export PATH="$HOME/.alire/bin:$PATH"
+./scripts/run.sh
+./scripts/run.sh --data-dir "/tmp/my diary"
+```
+
+PowerShell에서는 다음과 같이 실행합니다.
+
+```powershell
+./scripts/run.ps1
+./scripts/run.ps1 --data-dir "/tmp/my diary"
+```
+
+`run.ps1`은 Linux에서는 Bash를, Windows에서는 기본 WSL 배포판의 Bash를 호출합니다. Windows에서는 WSL 안에 저장소와 Linux용 Alire, GNAT, GPRbuild, Python 3, GNATformat을 준비하고, Alire와 GNATformat을 WSL 로그인 셸의 `PATH`에 추가해야 합니다. 앱 인자에 지정하는 저장 경로도 Linux 경로를 사용합니다.
+
+두 스크립트는 호출 위치와 관계없이 프로젝트 루트에서 Ada 소스 포맷팅 → GNAT 구문·의미 및 전체 경고 검사 → 앱·테스트 빌드 → Ada·저장소·TUI 테스트 → 앱 실행 순서로 진행합니다. 포맷팅은 `apps/`, `packages/*/src/`, `tests/`의 Ada 소스를 직접 수정하며 외부 의존성은 제외합니다. 린트 경고는 오류로 처리하며 검사 산출물은 별도 `lint/` 하위 디렉터리에 생성합니다. 어느 단계든 실패하면 즉시 종료하고, 스크립트에 전달한 인자는 앱에 그대로 전달합니다. 실제 화면을 사용하려면 UTF-8 대화형 터미널이 필요하며, 마지막 실행을 도움말로 확인하려면 `./scripts/run.sh --help`를 사용합니다.
+
 처음 빌드할 때 인터넷으로 Malef를 내려받습니다. Malef는 Alire 인덱스에 등록되어 있지 않아 [공식 저장소](https://github.com/joseaverde/Malef)의 `79b20b6bab88ef2d66528d77fe7ec1a1f4ee4638` 커밋을 고정합니다. `scripts/prepare_malef.py`가 Alire pre-build 단계에서 GNAT 16의 이름 해석·타입 추론 호환성 수정을 적용합니다. 수정은 프로젝트 내부 의존성 캐시에만 적용되며 반복 실행이 가능합니다. 컴파일 호환성 외에 표준 입력 파일 디스크립터, 저장 단축키의 흐름 제어, 터미널 크기 조회도 보정합니다. 이 과정은 원본의 라이선스 고지를 보존합니다.
 
 ## 기본 기능
