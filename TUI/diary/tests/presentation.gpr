@@ -1,0 +1,12 @@
+with "diary_presentation";
+project Presentation is
+   for Source_Dirs use (".");
+   for Source_Files use ("calendar_commands_tests.adb");
+   for Object_Dir use "../obj/presentation-tests";
+   for Exec_Dir use "../bin";
+   for Main use ("calendar_commands_tests.adb");
+   for Create_Missing_Dirs use "True";
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2022", "-gnatW8", "-gnata", "-g", "-gnatwa");
+   end Compiler;
+end Presentation;

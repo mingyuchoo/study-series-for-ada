@@ -230,6 +230,13 @@ procedure Release_Tests is
       Check
         (Has_Entry (Members, "/packages/tooling/diary_tooling.gpr"),
          "Source archive omits the tooling workspace package");
+      Check
+        (Has_Entry
+           (Members, "/packages/tooling_policy/diary_tooling_policy.gpr"),
+         "Source archive omits the tooling policy workspace package");
+      Check
+        (Has_Entry (Members, "/packages/presentation/diary_presentation.gpr"),
+         "Source archive omits the presentation workspace package");
       for Name of Members loop
          Check
            (not Contains (Name, "/obj/") and then not Contains (Name, "/bin/"),

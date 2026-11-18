@@ -1,4 +1,5 @@
 with "diary_tooling";
+with "diary_tooling_policy";
 project Tools is
    for Source_Dirs use ("apps/tools/src");
    for Object_Dir use "obj/tools";

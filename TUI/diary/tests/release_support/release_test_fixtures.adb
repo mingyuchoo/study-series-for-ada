@@ -178,6 +178,7 @@ package body Release_Test_Fixtures is
              [+"diary",
               +"domain_tests",
               +"editor_tests",
+              +"calendar_commands_tests",
               +"codec_tests",
               +"tooling_tests",
               +"tooling_file_tests",

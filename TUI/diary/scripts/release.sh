@@ -84,7 +84,7 @@ printf '\n[1/7] Preparing toolchain and dependencies\n'
 alr -n exec -- sh -c 'command -v gnatformat >/dev/null 2>&1' || \
     fail 'Install GNATformat with alr install gnatformat_bin and add its bin directory to PATH.'
 ./bin/diary_tools prepare "$project_root" "$platform"
-projects=(packages/*/*.gpr diary.gpr tools.gpr tests/tests.gpr tests/tooling.gpr tests/patches.gpr tests/integration.gpr tests/release.gpr)
+projects=(packages/*/*.gpr diary.gpr tools.gpr tests/tests.gpr tests/presentation.gpr tests/tooling.gpr tests/patches.gpr tests/integration.gpr tests/release.gpr)
 scenario=("-XMALEF_SYSTEM=$malef_system" -XMALEF_SUBSYSTEM=ansi -XMALEF_LIBRARY_TYPE=static)
 
 printf '\n[2/7] Formatting Ada sources\n'
@@ -101,13 +101,14 @@ done
 printf '\n[4/7] Building optimized application and tests\n'
 alr -n build --release -- "${scenario[@]}" -f -j0 \
     -cargs:Ada -O2 -gnatn -bargs -static -largs -static-libgcc
-for project in tools.gpr tests/tests.gpr tests/tooling.gpr tests/patches.gpr tests/integration.gpr tests/release.gpr; do
+for project in tools.gpr tests/tests.gpr tests/presentation.gpr tests/tooling.gpr tests/patches.gpr tests/integration.gpr tests/release.gpr; do
     alr -n exec -- gprbuild -P "$project" "${scenario[@]}" -f -j0
 done
 
 printf '\n[5/7] Running unit, storage, and terminal tests\n'
 ./bin/domain_tests
 ./bin/editor_tests
+./bin/calendar_commands_tests
 ./bin/codec_tests
 ./bin/tooling_tests
 ./bin/tooling_file_tests

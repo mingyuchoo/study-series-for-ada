@@ -1,0 +1,9 @@
+name = "diary_presentation"
+description = "Terminal-independent diary presentation"
+version = "0.1.0-dev"
+licenses = "GPL-3.0-or-later"
+project-files = ["diary_presentation.gpr"]
+
+[[depends-on]]
+diary_domain = "*"
+diary_application = "*"

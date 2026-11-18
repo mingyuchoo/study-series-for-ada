@@ -1,4 +1,4 @@
-with "diary_tooling";
+with "diary_tooling_policy";
 
 project Patches is
    for Source_Dirs use (".");

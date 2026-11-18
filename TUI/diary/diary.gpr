@@ -1,5 +1,6 @@
 with "diary_domain";
 with "diary_application";
+with "diary_presentation";
 with "diary_storage";
 with "malef";
 project Diary is

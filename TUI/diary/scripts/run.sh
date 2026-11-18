@@ -30,9 +30,8 @@ if ! alr exec -- sh -c 'command -v gnatformat >/dev/null 2>&1'; then
 fi
 
 printf '\n[1/5] Formatting Ada sources\n'
-# Formatting and linting also load Malef, so prepare it before either step.
-alr exec -- sh scripts/prepare.sh
-projects=(packages/*/*.gpr diary.gpr tools.gpr tests/tests.gpr tests/tooling.gpr tests/patches.gpr tests/integration.gpr tests/release.gpr)
+alr build --stop-after=pre-build -- "${scenario[@]}"
+projects=(packages/*/*.gpr diary.gpr tools.gpr tests/tests.gpr tests/presentation.gpr tests/tooling.gpr tests/patches.gpr tests/integration.gpr tests/release.gpr)
 for project in "${projects[@]}"; do
     alr exec -- gnatformat -P "$project" --no-subprojects -U --charset=utf-8 "${scenario[@]}"
 done
@@ -45,13 +44,14 @@ done
 
 printf '\n[3/5] Building\n'
 alr build -- "${scenario[@]}"
-for project in tools.gpr tests/tests.gpr tests/tooling.gpr tests/patches.gpr tests/integration.gpr tests/release.gpr; do
+for project in tools.gpr tests/tests.gpr tests/presentation.gpr tests/tooling.gpr tests/patches.gpr tests/integration.gpr tests/release.gpr; do
     alr exec -- gprbuild -P "$project" "${scenario[@]}" -j0
 done
 
 printf '\n[4/5] Testing\n'
 ./bin/domain_tests
 ./bin/editor_tests
+./bin/calendar_commands_tests
 ./bin/codec_tests
 ./bin/tooling_tests
 ./bin/tooling_file_tests

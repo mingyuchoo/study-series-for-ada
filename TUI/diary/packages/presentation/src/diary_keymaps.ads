@@ -1,4 +1,6 @@
-package Diary_Keymaps is
+package Diary_Keymaps
+  with Pure
+is
    type Kind is (Emacs, Helix);
    function Label (Value : Kind) return Wide_Wide_String
    is (case Value is

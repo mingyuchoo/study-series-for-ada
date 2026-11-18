@@ -11,15 +11,19 @@ project-files = ["diary.gpr"]
 [[depends-on]]
 diary_domain = "*"
 diary_application = "*"
+diary_presentation = "*"
 diary_storage = "*"
 diary_tooling = "*"
+diary_tooling_policy = "*"
 malef = "*"
 
 [[pins]]
 diary_domain = { path = "packages/domain" }
 diary_application = { path = "packages/application" }
+diary_presentation = { path = "packages/presentation" }
 diary_storage = { path = "packages/storage" }
 diary_tooling = { path = "packages/tooling" }
+diary_tooling_policy = { path = "packages/tooling_policy" }
 malef = { url = "https://github.com/joseaverde/Malef.git", commit = "79b20b6bab88ef2d66528d77fe7ec1a1f4ee4638" }
 
 [build-switches]

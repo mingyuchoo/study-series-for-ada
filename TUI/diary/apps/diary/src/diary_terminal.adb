@@ -2,6 +2,7 @@ with Malef.System;
 with Malef.Events;
 
 package body Diary_Terminal is
+   use Diary_Input;
    protected body Event_Queue is
       procedure Push (Value : Input_Event) is
       begin

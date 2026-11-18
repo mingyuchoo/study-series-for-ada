@@ -270,17 +270,19 @@ Helix의 일부만 구현합니다. 다중 선택, 횟수 접두(`3w`), `f`/`t` 
 ## 워크스페이스 구조
 
 ```text
-apps/diary/src/          실행 진입점, 화면 상태, 컨트롤러, Malef 어댑터
+apps/diary/src/          실행 진입점과 Malef 터미널 어댑터
 packages/domain/        순수 날짜 계산, 일기 엔티티와 검증
 packages/application/   저장소 포트, CRUD 유스케이스, 순수 편집기·문자 배치
+packages/presentation/  화면 컨트롤러, 화면 포트, 순수 키 입력 매핑
 packages/storage/       UTF-8 파일 코덱, 파일 저장소와 잠금
 scripts/                고정 Malef 버전의 컴파일러 호환성 처리
 apps/tools/src/         Ada 빌드·릴리스 보조 도구 진입점
-packages/tooling/       순수 소스 변환·릴리스 정책과 파일·호스트 어댑터
+packages/tooling/       빌드·릴리스 파일 및 호스트 어댑터
+packages/tooling_policy/ 순수 소스 변환과 릴리스 정책
 tests/                  Ada 단위·통합·PTY·릴리스 테스트
 ```
 
-의존성은 `application → domain`, `storage → application + domain`, `app → application + storage + Malef`입니다. 각 공유 패키지는 별도 Alire crate와 GPR 프로젝트로 경계를 유지합니다. 파일·환경 변수·시계·터미널 접근은 어댑터에서만 수행합니다.
+각 공유 패키지는 별도 Alire crate와 GPR 프로젝트로 경계를 유지합니다. 일기 실행 진입점은 파일 저장소와 Malef 터미널을 조립합니다. 화면 컨트롤러는 화면 포트와 저장소 포트를 통해 입력, 표시, 저장을 요청합니다. 빌드·릴리스 도구의 파일 및 호스트 어댑터는 별도의 순수 정책 패키지에 의존합니다. 파일·환경 변수·시계·터미널 접근은 실행 진입점과 어댑터에서 수행합니다.
 
 ## 검증
 

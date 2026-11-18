@@ -1,5 +1,8 @@
 name = "diary_tooling"
-description = "Pure diary build policies and tooling infrastructure"
+description = "Build and release filesystem and host adapters"
 version = "0.1.0-dev"
 licenses = "GPL-3.0-or-later"
 project-files = ["diary_tooling.gpr"]
+
+[[depends-on]]
+diary_tooling_policy = "*"

@@ -305,8 +305,6 @@ package body Diary_Tooling_Patches is
       if Index (Source, "static void diary_winch_handler") /= 0 then
          return Source;
       end if;
-      -- Darwin discards default-ignored SIGWINCH even when sigwait waits for it.
-      -- A non-ignoring disposition lets the Ada interrupt task receive it.
       return
         Replace
           (Replace

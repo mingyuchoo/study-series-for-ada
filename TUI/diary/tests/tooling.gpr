@@ -1,4 +1,5 @@
 with "diary_tooling";
+with "diary_tooling_policy";
 project Tooling is
    for Source_Dirs use ("tooling");
    for Object_Dir use "../obj/tooling-tests";
