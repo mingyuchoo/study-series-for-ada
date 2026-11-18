@@ -49,7 +49,7 @@ case "$(uname -m)" in
     *) fail 'Only x86-64 and ARM64 hosts are supported.' ;;
 esac
 
-required_tools=(alr python3 tar strip)
+required_tools=(alr tar strip)
 if [[ "$system" == Linux ]]; then
     required_tools+=(ldd getconf)
     if [[ "$bundle_only" == false ]]; then required_tools+=(dpkg-deb rpmbuild); fi
@@ -64,8 +64,9 @@ done
 umask 022
 if [[ "$output" != /* ]]; then output="$PWD/$output"; fi
 cd -- "$project_root"
+alr -n exec -- sh scripts/build_tools.sh
 if [[ -z "$version" ]]; then
-    version="$(python3 -c 'import re; from pathlib import Path; print(re.search(r"(?m)^version\s*=\s*\"([^\"]+)\"", Path("alire.toml").read_text())[1])')"
+    version="$(./bin/diary_tools version alire.toml)"
 fi
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || fail 'Invalid version in alire.toml.'
 mkdir -p -- "$output"
@@ -82,8 +83,8 @@ mkdir -p "$artifacts"
 printf '\n[1/7] Preparing toolchain and dependencies\n'
 alr -n exec -- sh -c 'command -v gnatformat >/dev/null 2>&1' || \
     fail 'Install GNATformat with alr install gnatformat_bin and add its bin directory to PATH.'
-alr -n exec -- python3 scripts/prepare_malef.py
-projects=(packages/*/*.gpr diary.gpr tests/tests.gpr)
+./bin/diary_tools prepare "$project_root" "$platform"
+projects=(packages/*/*.gpr diary.gpr tools.gpr tests/tests.gpr tests/tooling.gpr tests/patches.gpr tests/integration.gpr tests/release.gpr)
 scenario=("-XMALEF_SYSTEM=$malef_system" -XMALEF_SUBSYSTEM=ansi -XMALEF_LIBRARY_TYPE=static)
 
 printf '\n[2/7] Formatting Ada sources\n'
@@ -100,14 +101,20 @@ done
 printf '\n[4/7] Building optimized application and tests\n'
 alr -n build --release -- "${scenario[@]}" -f -j0 \
     -cargs:Ada -O2 -gnatn -bargs -static -largs -static-libgcc
-alr -n exec -- gprbuild -P tests/tests.gpr "${scenario[@]}" -f -j0
+for project in tools.gpr tests/tests.gpr tests/tooling.gpr tests/patches.gpr tests/integration.gpr tests/release.gpr; do
+    alr -n exec -- gprbuild -P "$project" "${scenario[@]}" -f -j0
+done
 
 printf '\n[5/7] Running unit, storage, and terminal tests\n'
 ./bin/domain_tests
 ./bin/editor_tests
 ./bin/codec_tests
-python3 tests/run_storage_tests.py
-python3 tests/tui_smoke.py
+./bin/tooling_tests
+./bin/tooling_file_tests
+./bin/patch_tests
+./bin/run_storage_tests
+if [[ "$system" == Linux ]]; then ./bin/release_tests; fi
+./bin/tui_smoke
 
 printf '\n[6/7] Staging portable and corresponding source bundles\n'
 stage="$workspace/stage"
@@ -118,74 +125,29 @@ chmod 755 "$stage/$prefix/bin/diary"
 if [[ "$system" == Linux ]]; then
     strip "$stage/$prefix/bin/diary"
     ldd "$stage/$prefix/bin/diary" > "$workspace/dependencies.txt"
-    python3 - "$workspace/dependencies.txt" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-for line in Path(sys.argv[1]).read_text().splitlines():
-    name = line.strip().split()[0]
-    if not re.fullmatch(r"linux-vdso\.so\.\d+|lib(c|m|pthread|dl|rt)\.so\.\d+|/\S*/ld-linux[^/\s]*\.so\.[\d.]+", name):
-        raise SystemExit(f"Unbundled runtime dependency: {line.strip()}")
-    if "not found" in line:
-        raise SystemExit(f"Missing runtime dependency: {line.strip()}")
-PY
 else
     strip -x "$stage/$prefix/bin/diary"
     otool -L "$stage/$prefix/bin/diary" > "$workspace/dependencies.txt"
-    python3 - "$workspace/dependencies.txt" <<'PY'
-from pathlib import Path
-import sys
-
-for line in Path(sys.argv[1]).read_text().splitlines()[1:]:
-    if not line.strip().startswith(("/usr/lib/", "/System/Library/")):
-        raise SystemExit(f"Unbundled runtime dependency: {line.strip()}")
-PY
 fi
+./bin/diary_tools validate-dependencies "$platform" "$workspace/dependencies.txt"
 "$stage/$prefix/bin/diary" --help
 cp README.md LICENSE "$documentation/"
 cp "$workspace/dependencies.txt" "$documentation/runtime-dependencies.txt"
 dependency=alire/cache/pins/malef_79b20b6b
 if [[ -d dependencies/malef/src ]]; then dependency=dependencies/malef; fi
 [[ -d "$dependency/src" ]] || fail 'Pinned Malef sources are missing.'
-dependency_license="$(python3 - "$dependency" <<'PY'
-from pathlib import Path
-import sys
-
-root = Path(sys.argv[1])
-for name in ("LICENSE", "LICENSE.txt", "COPYING", "LICENSE.md"):
-    if (root / name).is_file():
-        print(root / name)
-        break
-else:
-    raise SystemExit("Malef license file is missing")
-PY
-)"
+dependency_license="$(./bin/diary_tools license "$dependency")"
 cp "$dependency_license" "$documentation/MALEF-LICENSE"
 chmod 644 "$documentation/"*
 cp -R "$stage/$prefix/." "$workspace/$artifact_name/"
 tar -czf "$artifacts/$artifact_name.tar.gz" -C "$workspace" "$artifact_name"
-tar -c --exclude=obj --exclude=bin --exclude=alire --exclude=__pycache__ \
-    apps packages scripts tests alire.toml diary.gpr Makefile README.md LICENSE .gitattributes | \
+tar -c --exclude=obj --exclude=bin --exclude=alire \
+    apps packages scripts tests alire.toml diary.gpr tools.gpr Makefile README.md LICENSE .gitattributes | \
     tar -x -C "$workspace/$source_name"
 mkdir -p "$workspace/$source_name/dependencies/malef"
 tar -c --exclude=.git --exclude=obj --exclude=lib --exclude=alire -C "$dependency" . | \
     tar -x -C "$workspace/$source_name/dependencies/malef"
-python3 - "$workspace/$source_name/alire.toml" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-manifest = Path(sys.argv[1])
-source, count = re.subn(
-    r'(?m)^malef = \{ (?:url|path) = .* \}$',
-    'malef = { path = "dependencies/malef" }',
-    manifest.read_text(),
-)
-if count != 1:
-    raise SystemExit("Expected exactly one Malef pin in the source manifest")
-manifest.write_text(source)
-PY
+./bin/diary_tools pin-manifest "$workspace/$source_name/alire.toml"
 tar -czf "$artifacts/$source_name.tar.gz" -C "$workspace" "$source_name"
 
 printf '\n[7/7] Creating installers and SHA-256 manifest\n'
@@ -242,14 +204,6 @@ elif [[ "$bundle_only" == false ]]; then
         --version "${version%%-*}" --install-location / --ownership recommended \
         "$artifacts/$artifact_name.pkg"
 fi
-python3 - "$artifacts" "$artifact_name-SHA256SUMS" <<'PY'
-from pathlib import Path
-import hashlib
-import sys
-
-directory = Path(sys.argv[1])
-lines = [f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in sorted(directory.iterdir())]
-(directory / sys.argv[2]).write_text("".join(lines))
-PY
+./bin/diary_tools checksums "$artifacts" "$artifact_name-SHA256SUMS"
 cp "$artifacts/"* "$output/"
 printf '\nRelease artifacts: %s\n' "$output"

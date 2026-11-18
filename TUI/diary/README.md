@@ -4,7 +4,7 @@ Ada 2022와 Malef로 만든 로컬 TUI 일기장입니다. 월별 달력에서 �
 
 ## 실행
 
-Linux, UTF-8 터미널, Alire, GNAT 16.1, GPRbuild, Python 3이 필요합니다. 터미널은 최소 80열 × 27행이어야 합니다. 이 환경의 검증 도구 체인은 GNAT 16.1.0 / GPRbuild 26.0.1 / Alire 2.1.1입니다.
+Linux, UTF-8 터미널, Alire, GNAT 16.1, GPRbuild가 필요합니다. 빌드 보조 도구와 테스트도 Ada로 작성되어 Python 설치 없이 빌드·실행·테스트·릴리스할 수 있습니다. Bash와 PowerShell 스크립트는 플랫폼별 실행 절차를 연결합니다. 터미널은 최소 80열 × 27행이어야 합니다. 이 환경의 검증 도구 체인은 GNAT 16.1.0 / GPRbuild 26.0.1 / Alire 2.1.1입니다.
 
 ```bash
 make build
@@ -45,11 +45,11 @@ PowerShell에서는 다음과 같이 실행합니다.
 ./scripts/run.ps1 --data-dir "/tmp/my diary"
 ```
 
-`run.ps1`은 Linux에서는 Bash를, Windows에서는 기본 WSL 배포판의 Bash를 호출합니다. Windows에서는 WSL 안에 저장소와 Linux용 Alire, GNAT, GPRbuild, Python 3, GNATformat을 준비하고, Alire와 GNATformat을 WSL 로그인 셸의 `PATH`에 추가해야 합니다. 앱 인자에 지정하는 저장 경로도 Linux 경로를 사용합니다.
+`run.ps1`은 Linux에서는 Bash를, Windows에서는 기본 WSL 배포판의 Bash를 호출합니다. Windows에서는 WSL 안에 저장소와 Linux용 Alire, GNAT, GPRbuild, GNATformat을 준비하고, Alire와 GNATformat을 WSL 로그인 셸의 `PATH`에 추가해야 합니다. 앱 인자에 지정하는 저장 경로도 Linux 경로를 사용합니다.
 
 두 스크립트는 호출 위치와 관계없이 프로젝트 루트에서 Ada 소스 포맷팅 → GNAT 구문·의미 및 전체 경고 검사 → 앱·테스트 빌드 → Ada·저장소·TUI 테스트 → 앱 실행 순서로 진행합니다. 포맷팅은 `apps/`, `packages/*/src/`, `tests/`의 Ada 소스를 직접 수정하며 외부 의존성은 제외합니다. 린트 경고는 오류로 처리하며 검사 산출물은 별도 `lint/` 하위 디렉터리에 생성합니다. 어느 단계든 실패하면 즉시 종료하고, 스크립트에 전달한 인자는 앱에 그대로 전달합니다. 실제 화면을 사용하려면 UTF-8 대화형 터미널이 필요하며, 마지막 실행을 도움말로 확인하려면 `./scripts/run.sh --help`를 사용합니다.
 
-처음 빌드할 때 인터넷으로 Malef를 내려받습니다. Malef는 Alire 인덱스에 등록되어 있지 않아 [공식 저장소](https://github.com/joseaverde/Malef)의 `79b20b6bab88ef2d66528d77fe7ec1a1f4ee4638` 커밋을 고정합니다. `scripts/prepare_malef.py`가 Alire pre-build 단계에서 GNAT 16의 이름 해석·타입 추론 호환성 수정을 적용합니다. 수정은 프로젝트 내부 의존성 캐시에만 적용되며 반복 실행이 가능합니다. 컴파일 호환성 외에 표준 입력 파일 디스크립터, 저장 단축키의 흐름 제어, 터미널 크기 조회도 보정합니다. 또한 `Ctrl+V`, `Ctrl+D`, `Ctrl+Space`가 터미널이나 Malef에서 가로채이지 않고 키 입력으로 전달되도록 합니다. 이에 따라 `Ctrl+D`는 더 이상 앱을 종료하지 않습니다. 이 과정은 원본의 라이선스 고지를 보존합니다.
+처음 빌드할 때 인터넷으로 Malef를 내려받습니다. Malef는 Alire 인덱스에 등록되어 있지 않아 [공식 저장소](https://github.com/joseaverde/Malef)의 `79b20b6bab88ef2d66528d77fe7ec1a1f4ee4638` 커밋을 고정합니다. `scripts/prepare.sh`가 Alire pre-build 단계에서 독립적인 `tools.gpr`로 Ada 도구 `bin/diary_tools`를 빌드하고 GNAT 16의 이름 해석·타입 추론 호환성 수정을 적용합니다. 이 도구는 Malef에 의존하지 않습니다. 수정은 프로젝트 내부 의존성 캐시에만 적용되며 반복 실행이 가능합니다. 컴파일 호환성 외에 표준 입력 파일 디스크립터, 저장 단축키의 흐름 제어, 터미널 크기 조회도 보정합니다. 또한 `Ctrl+V`, `Ctrl+D`, `Ctrl+Space`가 터미널이나 Malef에서 가로채이지 않고 키 입력으로 전달되도록 합니다. 이에 따라 `Ctrl+D`는 더 이상 앱을 종료하지 않습니다. 이 과정은 원본의 라이선스 고지를 보존합니다.
 
 ## 릴리스와 설치파일
 
@@ -92,7 +92,7 @@ diary --help
 
 ### macOS
 
-macOS용 Alire, GNAT, GPRbuild, Python 3, GNATformat과 Xcode Command Line Tools의 `pkgbuild`, `otool`, `strip`이 필요합니다. 같은 명령을 macOS 터미널에서 실행합니다.
+macOS용 Alire, GNAT, GPRbuild, GNATformat과 Xcode Command Line Tools의 `pkgbuild`, `otool`, `strip`이 필요합니다. 같은 명령을 macOS 터미널에서 실행합니다.
 
 ```bash
 ./scripts/release.sh --version 1.0.0
@@ -106,7 +106,7 @@ macOS에서는 `macos-amd64` 또는 `macos-arm64` 이름의 실행 번들과 `.p
 
 현재 앱은 POSIX 터미널과 파일시스템을 사용하므로 Windows 설치파일은 **WSL에서 Linux 바이너리를 실행하는 형태**입니다. Windows 네이티브 PE 바이너리를 생성하지 않습니다. 빌드 PC에는 다음이 필요합니다.
 
-- 사용자 설정을 완료한 WSL 배포판과 그 안의 Linux용 Alire, GNAT, GPRbuild, Python 3, GNATformat
+- 사용자 설정을 완료한 WSL 배포판과 그 안의 Linux용 Alire, GNAT, GPRbuild, GNATformat
 - WSL 로그인 셸의 `PATH`에 등록된 Alire와 GNATformat
 - Windows PowerShell 5.1 이상, Windows 기본 `tar.exe`, [Inno Setup 6.3 이상](https://jrsoftware.org/isinfo.php)
 - WSL에서 접근 가능한 드라이브에 놓인 저장소
@@ -132,10 +132,11 @@ sha256sum -c diary-0.1.0-dev-linux-arm64-SHA256SUMS
 
 macOS에서는 `shasum -a 256 -c FILE`을 사용합니다. Windows에서는 목록의 해시와 `Get-FileHash -Algorithm SHA256 FILE`의 결과를 비교합니다. 기존 출력 폴더는 지우지 않으며 같은 이름의 결과물은 성공한 릴리스로 덮어씁니다. 여러 플랫폼을 같은 폴더에 모을 때 각 플랫폼의 체크섬 목록은 해당 실행에서 만든 파일만 기록합니다.
 
-릴리스 스크립트 자체의 회귀 검사는 다음과 같습니다. Python 검사는 Linux에서 실행하며, Ada 빌드 명령은 테스트 더블로 대체합니다.
+릴리스 스크립트 자체의 회귀 검사는 다음과 같습니다. Ada 회귀 검사는 Linux에서 실행하며, Ada 빌드 명령은 테스트 더블로 대체하고 실제 패키징과 Ada 릴리스 보조 도구를 검사합니다.
 
 ```bash
-python3 tests/release_tests.py
+make test-build
+./bin/release_tests
 pwsh -NoProfile -File tests/release_windows_tests.ps1
 ```
 
@@ -274,7 +275,9 @@ packages/domain/        순수 날짜 계산, 일기 엔티티와 검증
 packages/application/   저장소 포트, CRUD 유스케이스, 순수 편집기·문자 배치
 packages/storage/       UTF-8 파일 코덱, 파일 저장소와 잠금
 scripts/                고정 Malef 버전의 컴파일러 호환성 처리
-tests/                  Ada 단위·통합 테스트와 Python PTY 테스트
+apps/tools/src/         Ada 빌드·릴리스 보조 도구 진입점
+packages/tooling/       순수 소스 변환·릴리스 정책과 파일·호스트 어댑터
+tests/                  Ada 단위·통합·PTY·릴리스 테스트
 ```
 
 의존성은 `application → domain`, `storage → application + domain`, `app → application + storage + Malef`입니다. 각 공유 패키지는 별도 Alire crate와 GPR 프로젝트로 경계를 유지합니다. 파일·환경 변수·시계·터미널 접근은 어댑터에서만 수행합니다.
@@ -286,7 +289,7 @@ make test
 make smoke
 ```
 
-`make test`는 날짜 계산, 일기 검증, 편집기, 문자 배치 및 임시 폴더에서의 CRUD·재실행·잠금·저장 실패·손상 데이터 처리를 검사합니다. `make smoke`는 실제 PTY에서 한글 작성·저장·재실행·수정·삭제·확인 창·화면 크기 변경, Emacs·Helix 키맵별 편집과 키맵 선택, 작은 화면에서 명령 차단, 터미널 모드 복원과 비대화형 도움말도 검사합니다.
+`make test`는 날짜 계산, 일기 검증, 편집기, 문자 배치 및 임시 폴더에서의 CRUD·재실행·잠금·저장 실패·손상 데이터 처리와 빌드 보조 도구·릴리스 회귀를 검사합니다. `make smoke`는 Ada로 작성된 실제 PTY 테스트로 한글 작성·저장·재실행·수정·삭제·확인 창·화면 크기 변경, Emacs·Helix 키맵별 편집과 키맵 선택, 작은 화면에서 명령 차단, 터미널 모드 복원과 비대화형 도움말도 검사합니다.
 
 ## 추천 확장 기능
 

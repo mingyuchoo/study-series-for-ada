@@ -1,0 +1,14 @@
+with "diary_tooling";
+
+project Patches is
+   for Source_Dirs use (".");
+   for Source_Files use ("patch_tests.adb");
+   for Object_Dir use "../obj/patch-tests";
+   for Exec_Dir use "../bin";
+   for Main use ("patch_tests.adb");
+   for Create_Missing_Dirs use "True";
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2022", "-gnatW8", "-gnata", "-g", "-gnatwa");
+   end Compiler;
+end Patches;

@@ -1,0 +1,15 @@
+project Release is
+   for Source_Dirs use (".", "release_support");
+   for Source_Files use
+     ("release_tests.adb",
+      "release_test_files.ads", "release_test_files.adb",
+      "release_test_fixtures.ads", "release_test_fixtures.adb",
+      "release_test_processes.ads", "release_test_processes.adb");
+   for Object_Dir use "../obj/release-tests";
+   for Exec_Dir use "../bin";
+   for Main use ("release_tests.adb");
+   for Create_Missing_Dirs use "True";
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2022", "-gnatW8", "-gnata", "-g", "-gnatwa");
+   end Compiler;
+end Release;

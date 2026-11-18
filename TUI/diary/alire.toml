@@ -12,12 +12,14 @@ project-files = ["diary.gpr"]
 diary_domain = "*"
 diary_application = "*"
 diary_storage = "*"
+diary_tooling = "*"
 malef = "*"
 
 [[pins]]
 diary_domain = { path = "packages/domain" }
 diary_application = { path = "packages/application" }
 diary_storage = { path = "packages/storage" }
+diary_tooling = { path = "packages/tooling" }
 malef = { url = "https://github.com/joseaverde/Malef.git", commit = "79b20b6bab88ef2d66528d77fe7ec1a1f4ee4638" }
 
 [build-switches]
@@ -29,4 +31,4 @@ MALEF_SUBSYSTEM = "ansi"
 
 [[actions]]
 type = "pre-build"
-command = ["python3", "scripts/prepare_malef.py"]
+command = ["sh", "scripts/prepare.sh"]

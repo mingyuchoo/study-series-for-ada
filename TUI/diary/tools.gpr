@@ -1,0 +1,11 @@
+with "diary_tooling";
+project Tools is
+   for Source_Dirs use ("apps/tools/src");
+   for Object_Dir use "obj/tools";
+   for Exec_Dir use "bin";
+   for Main use ("diary_tools.adb");
+   for Create_Missing_Dirs use "True";
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2022", "-gnatW8", "-gnata", "-g", "-gnatwa");
+   end Compiler;
+end Tools;
