@@ -64,6 +64,16 @@ macOS에서 Homebrew가 설치한 `wish`를 직접 지정하려면 다음 명령
 
 Windows에서는 각 패키지로 이동해 같은 `alr exec` 명령을 실행한 뒤 `.\bin\test_counter.exe`를 실행합니다. 도메인 테스트는 범위 전체의 증가와 999에서의 포화를, 애플리케이션 테스트는 초기값과 이벤트에 따른 상태 전이를 확인합니다.
 
+GUI는 큰 숫자 표시, 강조된 **Increment +1** 버튼과 보조 **Reset** 버튼을 제공합니다. 999에 도달하면 증가 버튼이 비활성화되고 안내가 나타납니다. 초기화하면 증가 버튼과 포커스가 복원됩니다. Tab·Space로 버튼을 조작하거나 Alt+I·Alt+R 단축키를 사용할 수 있습니다.
+
+Tcl/Tk 화면의 통합 테스트는 그래픽 세션과 Tkinter가 포함된 Python 3이 필요합니다. `apps/counter_tk`에서 `alr build`를 실행한 뒤, 이 README가 있는 디렉터리에서 실행합니다.
+
+```sh
+python apps/counter_tk/tests/test_ui.py apps/counter_tk/bin/counter_tk
+```
+
+Windows에서는 백엔드 경로 끝에 `.exe`를 붙입니다. 테스트는 실제 Ada 백엔드와 GUI 위젯을 사용해 최대값에서의 버튼 상태, 초기화와 포커스 복원, 백엔드 오류 시 버튼 비활성화를 확인합니다.
+
 [GNATprove](https://alire.ada.dev/crates/gnatprove)를 설치해 PATH에 추가한 뒤 아래 명령을 실행합니다.
 
 ```sh
