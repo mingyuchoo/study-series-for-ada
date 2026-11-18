@@ -5,3 +5,5 @@ config/
 obj/
 lib/
 gnatprove/
+
+/dist/

@@ -19,6 +19,15 @@ Windows에서는 GWindows로, Linux와 macOS에서는 Tcl/Tk로 카운터 창을
 
 [Alire](https://alire.ada.dev/)와 네이티브 Ada 컴파일러 및 GPRbuild가 필요합니다. 아래 명령은 이 README가 있는 디렉터리에서 시작합니다.
 
+### 포맷팅·검사 후 실행
+
+PATH에 `alr`와 `gnatformat`을 준비하고 Alire에 GNAT 및 GPRbuild를 설정합니다. Linux와 macOS에서는 Tcl/Tk도 필요합니다.
+
+- Linux 및 macOS에서 `./scripts/run.sh`를 실행합니다.
+- Windows 11 PowerShell에서 `.\scripts\run.ps1`을 실행합니다.
+
+스크립트는 작업 트리의 Ada 소스를 직접 포맷팅합니다. GNAT 경고 검사, 앱 빌드, 도메인과 애플리케이션 테스트를 모두 통과하면 카운터 창을 엽니다.
+
 ### Windows (PowerShell)
 
 ```powershell
@@ -61,6 +70,20 @@ Windows에서는 각 패키지로 이동해 같은 `alr exec` 명령을 실행�
 (cd packages/counter_domain && alr exec -- gnatprove -P counter_domain.gpr --mode=prove --checks-as-errors=on --report=all)
 (cd packages/counter_application && alr exec -- gnatprove -P counter_application.gpr --mode=prove --checks-as-errors=on --report=all)
 ```
+
+## 설치 파일 만들기
+
+릴리스 스크립트는 소스를 임시 디렉터리에 복사한 뒤 Ada 포맷팅, GNAT 경고 검사, 릴리스 빌드, 패키지 테스트, 번들링, 설치 파일 생성을 순서대로 실행합니다. GNAT 경고는 오류로 처리하며, 성공한 설치 파일은 앱의 Alire 버전과 대상 아키텍처를 포함한 이름으로 `dist/`에 저장합니다.
+
+공통 준비물은 PATH의 `alr`, `gnatformat`, 그리고 Alire에 설정된 네이티브 GNAT 및 GPRbuild입니다. GNATformat은 `alr install gnatformat`으로 설치할 수 있습니다. [GNATformat](https://alire.ada.dev/crates/gnatformat)
+
+| 대상 | 실행 | 추가 준비물 및 결과 |
+| --- | --- | --- |
+| Debian·Ubuntu | `./release.sh` | `dpkg-dev` 필요. `.deb`를 `sudo apt install ./dist/<파일명>.deb`로 설치하고 앱 메뉴의 **Counter**를 엽니다. Tk 의존성은 패키지에 선언됩니다. |
+| macOS | `./release.sh` | `productbuild`, `plutil`, `lipo` 필요. `.pkg`를 열면 `/Applications/Counter.app`에 설치됩니다. 실행 시 Homebrew 기본 경로의 Tcl/Tk 또는 시스템 `wish`를 사용합니다. |
+| Windows 11 | `.\release.ps1` | [Inno Setup](https://jrsoftware.org/isinfo.php) 6.3 이상 필요. 설치 위치가 기본 경로와 다르면 `ISCC.exe`를 PATH에 추가합니다. 설치 `.exe`를 실행하면 현재 사용자의 시작 메뉴에 **Counter**가 추가됩니다. |
+
+macOS와 Windows 설치 파일은 서명 없이 생성됩니다.
 
 ## 라이선스
 
