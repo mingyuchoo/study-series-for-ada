@@ -9,6 +9,7 @@ package Diary_Terminal is
       Up_Key,
       Down_Key,
       Escape_Key,
+      Meta_Key,
       Resize_Key,
       Unknown_Key);
    type Input_Event is record

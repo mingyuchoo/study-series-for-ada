@@ -2,6 +2,7 @@ with Ada.Characters.Conversions;
 with Ada.Strings.Wide_Wide_Unbounded;
 with Diary_Dates;
 with Diary_Editor;
+with Diary_Keymaps;
 with Diary_Text;
 with Malef.Groups;
 with Malef.Surfaces;
@@ -12,11 +13,13 @@ package body Diary_Renderer is
    use Diary_Screen_State;
    use Ada.Strings.Wide_Wide_Unbounded;
    use type Diary_Dates.Date;
+   use type Diary_Keymaps.Kind;
    Background : constant RGBA_Type := "#101820";
    Foreground : constant RGBA_Type := "#D6DEE8";
    Muted      : constant RGBA_Type := "#7E95AB";
    Accent     : constant RGBA_Type := "#61D6B1";
    Panel      : constant RGBA_Type := "#1C2C3A";
+   Selection  : constant RGBA_Type := "#486078";
    function Wide (Value : String) return Wide_Wide_String
    renames Ada.Characters.Conversions.To_Wide_Wide_String;
    function Is_Usable return Boolean is
@@ -83,25 +86,35 @@ package body Diary_Renderer is
            (Value                   : Wide_Wide_String;
             Row, Col, Width, Height : Positive;
             Scroll                  : Natural := 0;
-            Cursor                  : Integer := -1)
+            Cursor                  : Integer := -1;
+            Select_From, Select_To  : Natural := 0)
          is
             Position : Diary_Text.Cell_Position;
             Size     : Positive;
-            procedure Mark_Cursor (Offset : Natural) is
+            procedure Mark_Cursor (Offset : Natural; Cells : Positive := 1) is
                Location : constant Diary_Text.Cell_Position :=
                  (if Position.Col >= Width
                   then (Position.Row + 1, 0)
                   else Position);
             begin
-               if Integer (Offset) = Cursor
-                 and then Location.Row >= Scroll
-                 and then Location.Row < Scroll + Height
+               if Location.Row < Scroll or else Location.Row >= Scroll + Height
                then
+                  null;
+               elsif Integer (Offset) = Cursor then
                   Highlight
                     (Row + Location.Row - Scroll,
                      Col + Location.Col,
                      1,
                      Accent);
+               elsif Cursor >= 0
+                 and then Offset >= Select_From
+                 and then Offset < Select_To
+               then
+                  Highlight
+                    (Row + Location.Row - Scroll,
+                     Col + Location.Col,
+                     Cells,
+                     Selection);
                end if;
             end Mark_Cursor;
          begin
@@ -112,7 +125,7 @@ package body Diary_Renderer is
                then
                   Position := (Position.Row + 1, 0);
                end if;
-               Mark_Cursor (Index - Value'First);
+               Mark_Cursor (Index - Value'First, Size);
                if Position.Row >= Scroll
                  and then Position.Row < Scroll + Height
                  and then Wide_Wide_Character'Pos (Value (Index)) /= 10
@@ -217,7 +230,9 @@ package body Diary_Renderer is
                Title_Row,
                (if State.Field = Title_Field
                 then Integer (Title_Cursor)
-                else -1));
+                else -1),
+               State.Select_From,
+               State.Select_To);
             Put
               (10,
                3,
@@ -230,12 +245,40 @@ package body Diary_Renderer is
                Width,
                Height,
                Body_Scroll,
-               (if State.Field = Body_Field then Integer (Cursor) else -1));
-            Put
-              (Positive (Rows) - 2,
-               3,
-               "Tab field  Ctrl+S save  Esc cancel  Ctrl+A/E line start/end",
-               Muted);
+               (if State.Field = Body_Field then Integer (Cursor) else -1),
+               State.Select_From,
+               State.Select_To);
+            if State.Keymap = Diary_Keymaps.Helix then
+               Put
+                 (5,
+                  34,
+                  (case State.Modal is
+                     when Normal_Mode => "NOR",
+                     when Insert_Mode => "INS",
+                     when Select_Mode => "SEL"),
+                  Accent);
+               Put
+                 (Positive (Rows) - 2,
+                  3,
+                  "i/a/o insert  Esc normal  hjkl move  w/b/e word  x line  v select  % all",
+                  Muted);
+               Put
+                 (Positive (Rows) - 1,
+                  3,
+                  "d/c/y/p edit  u/U undo  Tab field  :w save  :wq save+close  :q close  :q!",
+                  Muted);
+            else
+               Put
+                 (Positive (Rows) - 2,
+                  3,
+                  "Tab field  Ctrl+S save  C-x C-s save+stay  Esc cancel  C-/ undo  M-f/b word",
+                  Muted);
+               Put
+                 (Positive (Rows) - 1,
+                  3,
+                  "C-a/e line  C-k kill  C-Space mark  C-w cut  M-w copy  C-y yank  M-</> ends",
+                  Muted);
+            end if;
          end Editor;
       begin
          Surface.Fill (' ');
@@ -279,7 +322,18 @@ package body Diary_Renderer is
                Put
                  (Positive (Rows) - 2,
                   3,
-                  "Arrows date  [/] month  T today  N new  E/Enter edit  D delete  J/K scroll  Q quit",
+                  (if State.Keymap = Diary_Keymaps.Helix
+                   then
+                     "hjkl date  [/] month  T today  N new  E/I edit  D delete  C-d/C-u scroll  Q/:q"
+                   else
+                     "Arrows date  [/] month  T today  N new  E edit  D delete  J/K scroll  Q quit"),
+                  Muted);
+               Put
+                 (Positive (Rows) - 1,
+                  3,
+                  "Keymap: "
+                  & Diary_Keymaps.Label (State.Keymap)
+                  & "  (M switches Emacs / Helix)",
                   Muted);
             end if;
             if State.Mode = Confirm_Delete then
@@ -300,7 +354,9 @@ package body Diary_Renderer is
             Put
               (Positive (Rows),
                3,
-               To_Wide_Wide_String (State.Message),
+               (if State.Prompt_Shown
+                then ":" & To_Wide_Wide_String (State.Prompt)
+                else To_Wide_Wide_String (State.Message)),
                Accent);
          end if;
          declare

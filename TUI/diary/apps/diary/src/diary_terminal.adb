@@ -108,6 +108,12 @@ package body Diary_Terminal is
       Timed_Read (Following, Available);
       if not Available then
          return;
+      elsif Following.Kind = Character_Key
+        and then Following.Letter not in '[' | 'O'
+        and then Wide_Wide_Character'Pos (Following.Letter) in 8 | 32 .. 127
+      then
+         Value := (Meta_Key, Following.Letter);
+         return;
       elsif Following.Kind /= Character_Key
         or else Following.Letter not in '[' | 'O'
       then

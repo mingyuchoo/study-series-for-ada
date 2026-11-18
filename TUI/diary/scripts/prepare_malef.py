@@ -88,16 +88,24 @@ if updated != source:
 path = SOURCE / "subsystems/ansi/posix/__malef-platform-terminal-input-implementation.c"
 source = path.read_text()
 updated = source.replace("  new_term.c_lflag &= ~ICANON & ~ECHO;", "  new_term.c_lflag &= ~ICANON & ~ECHO;\n  new_term.c_iflag &= ~(IXON | ICRNL);") if "new_term.c_iflag &= ~(IXON | ICRNL);" not in source else source
+if "new_term.c_lflag &= ~IEXTEN;" not in updated:
+    updated = updated.replace("  new_term.c_iflag &= ~(IXON | ICRNL);", "  new_term.c_iflag &= ~(IXON | ICRNL);\n  new_term.c_lflag &= ~IEXTEN;")
 if updated != source:
     path.write_text(updated)
 path = SOURCE / "subsystems/ansi/posix/malef-platform-terminal-input-get_byte_immediate.adb"
 source = path.read_text()
 updated = source.replace("STDIN_FILENO : constant := 1;", "STDIN_FILENO : constant := 0;")
+updated = updated.replace("      elsif Buffer = EOF_Ch then", "      elsif False and then Buffer = EOF_Ch then")
 if updated != source:
     path.write_text(updated)
 path = SOURCE / "subsystems/ansi/malef-platform-terminal-input.adb"
 source = path.read_text()
 updated = source.replace(
+    """            if Key = Key_Type'Val (0) then
+               Key := Key_Unknown;
+            elsif Key = Key_Type'Val (27) then""",
+    "            if Key = Key_Type'Val (27) then",
+).replace(
     "      Rows := Row_Type (ws.ws_row);\n      Cols := Col_Type (ws.ws_col);",
     """      if Integer (temp) = 0
          and then Natural (ws.ws_row) in 1 .. Natural (Row_Type'Last)
