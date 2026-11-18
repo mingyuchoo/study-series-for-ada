@@ -1,8 +1,11 @@
 from pathlib import Path
 import re
+import sys
+import termios
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "alire/cache/pins/malef_79b20b6b/src"
+LOCAL_SOURCE = ROOT / "dependencies/malef/src"
+SOURCE = LOCAL_SOURCE if LOCAL_SOURCE.is_dir() else ROOT / "alire/cache/pins/malef_79b20b6b/src"
 for name in ["drawing/malef-groups", "widgets/malef-styles", "widgets/malef-styles-classes", "widgets/malef-styles-sheets"]:
     path = SOURCE / f"{name}.ads"
     source = path.read_text()
@@ -95,12 +98,19 @@ if updated != source:
 path = SOURCE / "subsystems/ansi/posix/malef-platform-terminal-input-get_byte_immediate.adb"
 source = path.read_text()
 updated = source.replace("STDIN_FILENO : constant := 1;", "STDIN_FILENO : constant := 0;")
+stdin_symbol = "__stdinp" if sys.platform == "darwin" else "stdin"
+updated = re.sub(r'External_Name => "(?:stdin|__stdinp)"', f'External_Name => "{stdin_symbol}"', updated)
 updated = updated.replace("      elsif Buffer = EOF_Ch then", "      elsif False and then Buffer = EOF_Ch then")
 if updated != source:
     path.write_text(updated)
 path = SOURCE / "subsystems/ansi/malef-platform-terminal-input.adb"
 source = path.read_text()
-updated = source.replace(
+updated = re.sub(
+    r"TIOCGWINSZ : constant Interfaces.C.unsigned_long := 16#[0-9A-Fa-f]+#;",
+    f"TIOCGWINSZ : constant Interfaces.C.unsigned_long := 16#{termios.TIOCGWINSZ:X}#;",
+    source,
+)
+updated = updated.replace(
     """            if Key = Key_Type'Val (0) then
                Key := Key_Unknown;
             elsif Key = Key_Type'Val (27) then""",

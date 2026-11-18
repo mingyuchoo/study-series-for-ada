@@ -51,6 +51,96 @@ PowerShell에서는 다음과 같이 실행합니다.
 
 처음 빌드할 때 인터넷으로 Malef를 내려받습니다. Malef는 Alire 인덱스에 등록되어 있지 않아 [공식 저장소](https://github.com/joseaverde/Malef)의 `79b20b6bab88ef2d66528d77fe7ec1a1f4ee4638` 커밋을 고정합니다. `scripts/prepare_malef.py`가 Alire pre-build 단계에서 GNAT 16의 이름 해석·타입 추론 호환성 수정을 적용합니다. 수정은 프로젝트 내부 의존성 캐시에만 적용되며 반복 실행이 가능합니다. 컴파일 호환성 외에 표준 입력 파일 디스크립터, 저장 단축키의 흐름 제어, 터미널 크기 조회도 보정합니다. 또한 `Ctrl+V`, `Ctrl+D`, `Ctrl+Space`가 터미널이나 Malef에서 가로채이지 않고 키 입력으로 전달되도록 합니다. 이에 따라 `Ctrl+D`는 더 이상 앱을 종료하지 않습니다. 이 과정은 원본의 라이선스 고지를 보존합니다.
 
+## 릴리스와 설치파일
+
+릴리스는 대상 OS에서 직접 빌드합니다. `scripts/release.sh`는 Linux와 macOS에서, `scripts/release.ps1`은 Windows 11에서 실행합니다. x86-64와 ARM64를 지원하며 한 번 실행할 때 현재 호스트 아키텍처의 결과물을 만듭니다.
+
+두 스크립트 모두 Ada 소스 포맷팅 → 경고를 오류로 취급하는 린팅 → 최적화 빌드 → 도메인·편집기·코덱·저장소·PTY 테스트 → 번들링 → 설치파일 생성 순서로 진행합니다. 포맷팅은 저장소 소스를 직접 수정합니다. 외부 의존성은 포맷팅하지 않으며, 실패한 단계가 있으면 설치파일을 만들지 않습니다. 릴리스 바이너리는 Ada와 GCC 런타임을 정적으로 링크하고, 패키징 전에 남은 동적 의존성이 OS 기본 라이브러리인지 검사합니다.
+
+### Linux
+
+기존 빌드 도구 외에 `tar`, `strip`, `ldd`, `getconf`, `dpkg-deb`, `rpmbuild`가 필요합니다. Debian/Ubuntu에서는 `dpkg-dev`, `rpm`, `binutils`, Fedora 계열에서는 `dpkg`, `rpm-build`, `binutils` 패키지를 준비합니다. 두 설치 형식을 모두 생성하므로 두 패키징 도구가 모두 있어야 합니다.
+
+```bash
+export PATH="$HOME/.alire/bin:$PATH"
+./scripts/release.sh
+./scripts/release.sh --version 1.0.0 --output "/tmp/diary releases"
+./scripts/release.sh --bundle-only
+```
+
+기본 버전은 `alire.toml`의 `version`이고 출력 폴더는 프로젝트의 `dist/`입니다. `--version`은 `1.0.0`, `1.0.0-rc.1` 형식을 받습니다. `--output`의 상대 경로는 호출한 디렉터리 기준입니다. `--bundle-only`도 모든 품질 검사를 실행하며 OS 설치파일만 생략합니다. 어느 위치에서든 스크립트를 호출할 수 있습니다.
+
+기본 버전과 ARM64 호스트에서는 다음 파일을 만듭니다.
+
+```text
+dist/diary-0.1.0-dev-linux-arm64.tar.gz
+dist/diary-0.1.0-dev-linux-arm64.deb
+dist/diary-0.1.0-dev-linux-arm64.rpm
+dist/diary-0.1.0-dev-linux-arm64-source.tar.gz
+dist/diary-0.1.0-dev-linux-arm64-SHA256SUMS
+```
+
+`.deb`와 `.rpm`은 `/usr/bin/diary`와 `/usr/share/doc/ada-diary/`를 설치합니다. 소스 버전 `0.1.0-dev`는 Debian에서 `0.1.0~dev`, RPM에서 버전 `0.1.0`과 릴리스 `0.dev`로 변환합니다. Linux 번들은 호환되는 glibc가 필요하며, Debian 패키지는 빌드 호스트의 glibc 버전 이상을 요구합니다. 배포할 가장 오래된 glibc 환경에서 빌드하는 것을 권장합니다. RPM은 바이너리에서 런타임 요구 사항을 자동 계산합니다.
+
+```bash
+sudo apt install ./dist/diary-0.1.0-dev-linux-arm64.deb
+sudo dnf install ./dist/diary-0.1.0-dev-linux-arm64.rpm
+diary --help
+```
+
+위 설치 명령 중 배포판에 맞는 하나를 사용합니다. 설치파일 대신 `.tar.gz`를 풀고 내부의 `bin/diary`를 실행할 수도 있습니다.
+
+### macOS
+
+macOS용 Alire, GNAT, GPRbuild, Python 3, GNATformat과 Xcode Command Line Tools의 `pkgbuild`, `otool`, `strip`이 필요합니다. 같은 명령을 macOS 터미널에서 실행합니다.
+
+```bash
+./scripts/release.sh --version 1.0.0
+sudo installer -pkg ./dist/diary-1.0.0-macos-arm64.pkg -target /
+/usr/local/bin/diary --help
+```
+
+macOS에서는 `macos-amd64` 또는 `macos-arm64` 이름의 실행 번들과 `.pkg`를 생성합니다. 설치 위치는 `/usr/local/bin/diary`와 `/usr/local/share/doc/ada-diary/`입니다. 릴리스 스크립트는 Malef의 `unix`/ANSI 구현을 선택하며 의존성 캐시에 호스트의 터미널 크기 상수와 macOS 표준 입력 심볼을 적용합니다. 현재 `run.sh`는 기존 Linux 전용 실행 경로를 유지하므로 macOS에서는 릴리스 번들의 실행파일을 사용합니다. `.pkg`는 서명·공증하지 않은 로컬 설치파일입니다.
+
+### Windows 11
+
+현재 앱은 POSIX 터미널과 파일시스템을 사용하므로 Windows 설치파일은 **WSL에서 Linux 바이너리를 실행하는 형태**입니다. Windows 네이티브 PE 바이너리를 생성하지 않습니다. 빌드 PC에는 다음이 필요합니다.
+
+- 사용자 설정을 완료한 WSL 배포판과 그 안의 Linux용 Alire, GNAT, GPRbuild, Python 3, GNATformat
+- WSL 로그인 셸의 `PATH`에 등록된 Alire와 GNATformat
+- Windows PowerShell 5.1 이상, Windows 기본 `tar.exe`, [Inno Setup 6.3 이상](https://jrsoftware.org/isinfo.php)
+- WSL에서 접근 가능한 드라이브에 놓인 저장소
+
+```powershell
+./scripts/release.ps1
+./scripts/release.ps1 -Version 1.0.0 -Distribution Ubuntu -OutputDirectory 'C:\diary releases'
+./scripts/release.ps1 -InnoSetupCompiler 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+```
+
+`-Distribution`을 생략하면 기본 WSL 배포판에서 빌드합니다. PowerShell의 `-Help`, Bash의 `--help`로 옵션을 볼 수 있습니다. Windows 스크립트는 WSL 안에서 `release.sh --bundle-only`를 실행하므로 WSL에 Debian/RPM 패키징 도구는 필요하지 않습니다. 결과물은 `diary-VERSION-windows-ARCH-setup.exe`, 실행 가능한 파일들을 담은 `.zip`, 소스 `.tar.gz`, `SHA256SUMS`입니다. Inno Setup 설치파일은 사용자별로 설치하며 시작 메뉴 실행기와 제거 프로그램을 등록합니다. 코드 서명은 수행하지 않습니다.
+
+설치받는 PC에도 WSL 배포판과 호환되는 glibc가 필요하지만 Ada 빌드 도구는 필요하지 않습니다. 기본 WSL 배포판은 패키지와 같은 CPU 아키텍처여야 합니다. 실행할 배포판을 바꾸려면 `DIARY_WSL_DISTRIBUTION` 환경 변수를 설정합니다. 시작 메뉴의 Ada Diary 또는 설치 폴더의 `diary.cmd`로 실행하며, 인자의 `--data-dir`은 WSL 경로를 받습니다. 일기 데이터도 WSL 사용자 디렉터리에 저장합니다. [Microsoft WSL 명령 안내](https://learn.microsoft.com/en-us/windows/wsl/basic-commands)를 참고하세요.
+
+### 배포 결과 검증
+
+번들에는 앱·Malef 라이선스와 실행 의존성 목록을 넣습니다. 소스 번들은 워크스페이스 코드, 릴리스 스크립트, 패치가 적용된 고정 Malef 소스를 `dependencies/malef/`에 포함합니다. 번들의 `alire.toml`은 포함된 Malef 소스를 직접 참조하므로 압축을 푼 프로젝트에서 `alr build`할 수 있습니다. 빌드용 호환성 스크립트도 이 로컬 소스를 우선 사용합니다. 플랫폼별 소스 번들은 이름이 달라 같은 출력 폴더에 모아도 서로 덮어쓰지 않습니다.
+
+```bash
+cd dist
+sha256sum -c diary-0.1.0-dev-linux-arm64-SHA256SUMS
+```
+
+macOS에서는 `shasum -a 256 -c FILE`을 사용합니다. Windows에서는 목록의 해시와 `Get-FileHash -Algorithm SHA256 FILE`의 결과를 비교합니다. 기존 출력 폴더는 지우지 않으며 같은 이름의 결과물은 성공한 릴리스로 덮어씁니다. 여러 플랫폼을 같은 폴더에 모을 때 각 플랫폼의 체크섬 목록은 해당 실행에서 만든 파일만 기록합니다.
+
+릴리스 스크립트 자체의 회귀 검사는 다음과 같습니다. Python 검사는 Linux에서 실행하며, Ada 빌드 명령은 테스트 더블로 대체합니다.
+
+```bash
+python3 tests/release_tests.py
+pwsh -NoProfile -File tests/release_windows_tests.ps1
+```
+
+현재 Linux ARM64에서 전체 파이프라인과 실제 `.deb`·`.rpm` 생성 및 번들 실행을 검증했습니다. PowerShell 구문·프로세스 인자 처리도 검사했습니다. macOS 네이티브 빌드와 Windows 설치파일의 실제 설치·실행은 해당 OS에서 추가 검증이 필요합니다.
+
 ## 기본 기능
 
 - 월별 달력, 선택 날짜 강조, 오늘 표시, 일기가 있는 날짜의 `*` 표시

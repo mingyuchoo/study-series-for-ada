@@ -2,6 +2,7 @@
 /config/
 /obj/
 /bin/
+/dist/
 /packages/*/obj/
 /packages/*/config/
 /packages/*/alire/
