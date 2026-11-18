@@ -1,0 +1,9 @@
+name = "diary_storage"
+description = "Diary storage package"
+version = "0.1.0-dev"
+licenses = "GPL-3.0-or-later"
+project-files = ["diary_storage.gpr"]
+
+[[depends-on]]
+diary_application = "*"
+diary_domain = "*"

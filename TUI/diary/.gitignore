@@ -1,0 +1,11 @@
+/alire/
+/config/
+/obj/
+/bin/
+/packages/*/obj/
+/packages/*/config/
+/packages/*/alire/
+__pycache__/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

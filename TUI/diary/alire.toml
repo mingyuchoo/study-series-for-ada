@@ -1,0 +1,32 @@
+name = "diary"
+description = "A local calendar diary with a Malef terminal interface"
+version = "0.1.0-dev"
+authors = ["Mingyu Choo"]
+maintainers = ["Mingyu Choo <mingyuchoo@gmail.com>"]
+maintainers-logins = ["mingyuchoo"]
+licenses = "GPL-3.0-or-later"
+executables = ["diary"]
+project-files = ["diary.gpr"]
+
+[[depends-on]]
+diary_domain = "*"
+diary_application = "*"
+diary_storage = "*"
+malef = "*"
+
+[[pins]]
+diary_domain = { path = "packages/domain" }
+diary_application = { path = "packages/application" }
+diary_storage = { path = "packages/storage" }
+malef = { url = "https://github.com/joseaverde/Malef.git", commit = "79b20b6bab88ef2d66528d77fe7ec1a1f4ee4638" }
+
+[build-switches]
+"*".ada_version = "Ada2022"
+
+[gpr-set-externals]
+MALEF_SYSTEM = "linux"
+MALEF_SUBSYSTEM = "ansi"
+
+[[actions]]
+type = "pre-build"
+command = ["python3", "scripts/prepare_malef.py"]
