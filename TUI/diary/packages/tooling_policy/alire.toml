@@ -1,5 +1,5 @@
 name = "diary_tooling_policy"
 description = "Pure build and release policies"
 version = "0.1.0-dev"
-licenses = "GPL-3.0-or-later"
+licenses = "custom-MINGYUCHOO-Personal-Use"
 project-files = ["diary_tooling_policy.gpr"]

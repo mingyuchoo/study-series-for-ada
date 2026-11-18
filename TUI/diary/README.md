@@ -305,4 +305,8 @@ make smoke
 
 이 항목들은 후속 기능 제안이며 현재 구현 범위는 달력과 일기 CRUD입니다.
 
-Malef는 GPL-3.0-or-later이며, 이 앱의 Alire 패키지 메타데이터도 같은 라이선스를 사용합니다.
+## 라이선스
+
+이 프로젝트의 자체 코드는 MINGYUCHOO (mingyuchoo@gmail.com)의 개인 사용을 위한 것입니다. 자세한 조건은 [LICENSE](LICENSE)를 참조하세요.
+
+외부 의존성인 Malef에는 GPL-3.0-or-later가 적용됩니다. Malef와 결합한 앱을 제3자에게 배포하려면 GPL 조건을 충족해야 합니다.

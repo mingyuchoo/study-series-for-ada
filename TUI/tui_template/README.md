@@ -34,3 +34,9 @@ GNATformat이 설치되어 있다면 `./scripts/run.sh --help`로 포맷팅, 전
 ```
 
 릴리스 스크립트는 최적화한 바이너리, 대응하는 소스 번들, SHA-256 체크섬을 기본적으로 `dist/`에 만듭니다. 네이티브 설치 파일도 생성하려면 Linux에서 `dpkg-deb`와 `rpmbuild`를, macOS에서 Xcode Command Line Tools를 준비합니다. WSL 기반 Windows 설치 파일은 `./scripts/release.ps1 -Help`에서 옵션을 확인할 수 있습니다.
+
+## 라이선스
+
+이 프로젝트의 자체 코드는 MINGYUCHOO (mingyuchoo@gmail.com)의 개인 사용을 위한 것입니다. 자세한 조건은 [LICENSE](LICENSE)를 참조하세요.
+
+외부 의존성인 Malef에는 GPL-3.0-or-later가 적용됩니다.

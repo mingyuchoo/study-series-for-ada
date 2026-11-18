@@ -4,7 +4,7 @@ version = "0.1.0-dev"
 authors = ["Mingyu Choo"]
 maintainers = ["Mingyu Choo <mingyuchoo@gmail.com>"]
 maintainers-logins = ["mingyuchoo"]
-licenses = "GPL-3.0-or-later"
+licenses = "custom-MINGYUCHOO-Personal-Use"
 executables = ["tui_template"]
 project-files = ["tui_template.gpr"]
 

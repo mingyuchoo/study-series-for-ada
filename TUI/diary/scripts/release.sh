@@ -184,7 +184,7 @@ Name: ada-diary
 Version: $rpm_version
 Release: $rpm_release
 Summary: Local calendar diary with a Malef terminal interface
-License: GPL-3.0-or-later
+License: LicenseRef-MINGYUCHOO-Personal-Use
 BuildArch: $rpm_architecture
 %description
 A UTF-8 Ada 2022 terminal diary with Emacs and Helix keymaps.

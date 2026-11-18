@@ -181,7 +181,7 @@ Name: ada-tui-template
 Version: $rpm_version
 Release: $rpm_release
 Summary: Ada terminal application template with Malef
-License: GPL-3.0-or-later
+License: LicenseRef-MINGYUCHOO-Personal-Use
 BuildArch: $rpm_architecture
 %description
 A starter workspace for UTF-8 terminal applications in Ada 2022.

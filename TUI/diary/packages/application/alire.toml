@@ -1,7 +1,7 @@
 name = "diary_application"
 description = "Diary application package"
 version = "0.1.0-dev"
-licenses = "GPL-3.0-or-later"
+licenses = "custom-MINGYUCHOO-Personal-Use"
 project-files = ["diary_application.gpr"]
 
 [[depends-on]]

@@ -1,7 +1,7 @@
 name = "diary_presentation"
 description = "Terminal-independent diary presentation"
 version = "0.1.0-dev"
-licenses = "GPL-3.0-or-later"
+licenses = "custom-MINGYUCHOO-Personal-Use"
 project-files = ["diary_presentation.gpr"]
 
 [[depends-on]]
