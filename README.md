@@ -12,6 +12,11 @@ Visit the link below to install Alire
 
 ```bash
 $ alr toolchain --select
+> 1 (gnat_native)
+> 1 (gprbuild)
+
+$ alr install gnatformat_bin
+# Then add "$HOME/.alire/bin" to PATH.
 ```
 
 ## How to create a project
