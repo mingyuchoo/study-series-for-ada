@@ -1,0 +1,8 @@
+name = "tui_tooling"
+description = "Build and release filesystem and host adapters"
+version = "0.1.0-dev"
+licenses = "GPL-3.0-or-later"
+project-files = ["tui_tooling.gpr"]
+
+[[depends-on]]
+tui_tooling_policy = "*"

@@ -1,0 +1,35 @@
+name = "tui_template"
+description = "An Ada terminal application template with Malef"
+version = "0.1.0-dev"
+authors = ["Mingyu Choo"]
+maintainers = ["Mingyu Choo <mingyuchoo@gmail.com>"]
+maintainers-logins = ["mingyuchoo"]
+licenses = "GPL-3.0-or-later"
+executables = ["tui_template"]
+project-files = ["tui_template.gpr"]
+
+[[depends-on]]
+tui_presentation = "*"
+tui_tooling = "*"
+tui_tooling_policy = "*"
+malef = "*"
+
+[[pins]]
+tui_presentation = { path = "packages/presentation" }
+tui_tooling = { path = "packages/tooling" }
+tui_tooling_policy = { path = "packages/tooling_policy" }
+malef = { url = "https://github.com/joseaverde/Malef.git", commit = "79b20b6bab88ef2d66528d77fe7ec1a1f4ee4638" }
+
+[build-switches]
+"*".ada_version = "Ada2022"
+
+[gpr-set-externals]
+MALEF_SUBSYSTEM = "ansi"
+
+[gpr-set-externals.'case(os)']
+linux = { MALEF_SYSTEM = "linux" }
+macos = { MALEF_SYSTEM = "unix" }
+
+[[actions]]
+type = "pre-build"
+command = ["sh", "scripts/prepare.sh"]

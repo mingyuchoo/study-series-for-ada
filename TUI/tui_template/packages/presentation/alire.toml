@@ -1,0 +1,6 @@
+name = "tui_presentation"
+description = "Terminal-independent input and presentation model"
+version = "0.1.0-dev"
+licenses = "GPL-3.0-or-later"
+project-files = ["tui_presentation.gpr"]
+
