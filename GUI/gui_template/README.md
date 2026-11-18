@@ -19,14 +19,14 @@ Windows에서는 GWindows로, Linux와 macOS에서는 Tcl/Tk로 카운터 창을
 
 [Alire](https://alire.ada.dev/)와 네이티브 Ada 컴파일러 및 GPRbuild가 필요합니다. 아래 명령은 이 README가 있는 디렉터리에서 시작합니다.
 
-### 포맷팅·검사 후 실행
+### 검사 후 실행
 
-PATH에 `alr`와 `gnatformat`을 준비하고 Alire에 GNAT 및 GPRbuild를 설정합니다. Linux와 macOS에서는 Tcl/Tk도 필요합니다.
+PATH에 `alr`를 준비하고 Alire에 GNAT 및 GPRbuild를 설정합니다. Linux와 macOS에서는 `gnatformat`과 Tcl/Tk도 필요합니다.
 
 - Linux 및 macOS에서 `./scripts/run.sh`를 실행합니다.
 - Windows 11 PowerShell에서 `.\scripts\run.ps1`을 실행합니다.
 
-스크립트는 작업 트리의 Ada 소스를 직접 포맷팅합니다. GNAT 경고 검사, 앱 빌드, 도메인과 애플리케이션 테스트를 모두 통과하면 카운터 창을 엽니다.
+Linux와 macOS 스크립트는 작업 트리의 Ada 소스를 직접 포맷팅하며, Windows 스크립트는 포맷팅을 건너뜁니다. GNAT 경고 검사, 앱 빌드, 도메인과 애플리케이션 테스트를 모두 통과하면 카운터 창을 엽니다.
 
 ### Windows (PowerShell)
 

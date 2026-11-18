@@ -37,25 +37,11 @@ function Invoke-Crate {
 }
 
 $alr = (Get-Command alr -CommandType Application).Source
-$formatter = (Get-Command gnatformat -CommandType Application).Source
 $root = Split-Path -Parent $PSScriptRoot
 $app = 'apps/counter_windows'
 $packages = @('packages/counter_domain', 'packages/counter_application')
 
 Invoke-Crate $root {
-    Write-Host 'Formatting Ada sources'
-    $sourceDirectories = @(
-        'apps/counter_tk/src',
-        'apps/counter_windows/src',
-        'packages/counter_domain/src',
-        'packages/counter_domain/tests',
-        'packages/counter_application/src',
-        'packages/counter_application/tests'
-    )
-    $sources = Get-ChildItem -LiteralPath $sourceDirectories -Recurse -File |
-        Where-Object { $_.Extension -in '.adb', '.ads' }
-    Invoke-Native $formatter (@('--no-project') + $sources.FullName)
-
     Write-Host 'Linting Ada sources'
     foreach ($package in $packages) {
         Invoke-Crate $package {
@@ -64,6 +50,7 @@ Invoke-Crate $root {
         }
     }
     Invoke-Crate $app {
+        Invoke-Native $alr @('-n', 'build', '--stop-after=pre-build')
         $units = Get-ChildItem -LiteralPath 'src' -Recurse -File -Filter '*.adb'
         Invoke-Native $alr (@('-n', 'exec', '--', 'gprbuild', '-P', 'counter_windows.gpr',
             '-c', '-f', '-u') + $units.Name + @('-cargs:Ada', '-gnatwa', '-gnatwe'))

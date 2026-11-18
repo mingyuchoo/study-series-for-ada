@@ -88,6 +88,7 @@ try {
         }
     }
     Invoke-Crate $app {
+        Invoke-Native $alr @('-n', 'build', '--stop-after=pre-build')
         $units = Get-ChildItem -LiteralPath 'src' -Recurse -File -Filter '*.adb'
         Invoke-Native $alr (@('-n', 'exec', '--', 'gprbuild', '-P', 'counter_windows.gpr',
             '-c', '-f', '-u') + $units.Name + @('-cargs:Ada', '-gnatwa', '-gnatwe'))
