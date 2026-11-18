@@ -4,10 +4,16 @@ set -euo pipefail
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd -- "$project_root"
 
-if [[ "$(uname -s)" != Linux ]]; then
-    printf '%s\n' 'This application requires Linux. On Windows, use scripts/run.ps1 with WSL.' >&2
-    exit 1
-fi
+system="$(uname -s)"
+case "$system" in
+    Linux) malef_system=linux ;;
+    Darwin) malef_system=unix ;;
+    *)
+        printf 'Unsupported host: %s. Use scripts/run.ps1 with WSL on Windows.\n' "$system" >&2
+        exit 1
+        ;;
+esac
+scenario=("-XMALEF_SYSTEM=$malef_system" -XMALEF_SUBSYSTEM=ansi)
 
 for tool in alr; do
     if ! command -v "$tool" >/dev/null 2>&1; then
@@ -24,21 +30,23 @@ if ! alr exec -- sh -c 'command -v gnatformat >/dev/null 2>&1'; then
 fi
 
 printf '\n[1/5] Formatting Ada sources\n'
+# Formatting and linting also load Malef, so prepare it before either step.
+alr exec -- sh scripts/prepare.sh
 projects=(packages/*/*.gpr diary.gpr tools.gpr tests/tests.gpr tests/tooling.gpr tests/patches.gpr tests/integration.gpr tests/release.gpr)
 for project in "${projects[@]}"; do
-    alr exec -- gnatformat -P "$project" --no-subprojects -U --charset=utf-8
+    alr exec -- gnatformat -P "$project" --no-subprojects -U --charset=utf-8 "${scenario[@]}"
 done
 
 printf '\n[2/5] Linting Ada sources\n'
 for project in "${projects[@]}"; do
-    alr exec -- gprbuild -P "$project" --subdirs=lint -c -f -u \
+    alr exec -- gprbuild -P "$project" "${scenario[@]}" --subdirs=lint -c -f -u \
         -cargs:Ada -gnatc -gnatwa -gnatwe
 done
 
 printf '\n[3/5] Building\n'
-alr build
+alr build -- "${scenario[@]}"
 for project in tools.gpr tests/tests.gpr tests/tooling.gpr tests/patches.gpr tests/integration.gpr tests/release.gpr; do
-    alr exec -- gprbuild -P "$project" -j0
+    alr exec -- gprbuild -P "$project" "${scenario[@]}" -j0
 done
 
 printf '\n[4/5] Testing\n'

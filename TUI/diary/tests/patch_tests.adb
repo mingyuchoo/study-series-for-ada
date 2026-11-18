@@ -337,6 +337,32 @@ procedure Patch_Tests is
          "termios flags use LF after rewriting a source with lone CR endings");
    end Check_Termios;
 
+   procedure Check_Darwin_Resize_Signal is
+      Name   : constant String :=
+        "subsystems/ansi/posix/__malef-platform-terminal-input-implementation.c";
+      Source : constant String :=
+        "#include <termios.h>"
+        & LF
+        & "void MALEF(prepare) (void) {"
+        & LF
+        & "void MALEF(restore) (void) {"
+        & LF;
+      Actual : constant String := Transform (Name, Source, "macos");
+   begin
+      Expect
+        (Index (Actual, "#include <signal.h>") > 0,
+         "Darwin resize preparation declares signal");
+      Expect
+        (Index (Actual, "signal (SIGWINCH, diary_winch_handler)") > 0,
+         "Darwin makes SIGWINCH deliverable to the Ada sigwait handler");
+      Expect
+        (Index (Actual, "signal (SIGWINCH, diary_old_winch_handler)") > 0,
+         "Darwin restores the previous SIGWINCH disposition");
+      Expect
+        (Transform (Name, Actual, "macos") = Actual,
+         "Darwin resize preparation is idempotent");
+   end Check_Darwin_Resize_Signal;
+
    procedure Check_Byte_Reading is
       Name     : constant String :=
         "subsystems/ansi/posix/malef-platform-terminal-input-get_byte_immediate.adb";
@@ -430,6 +456,16 @@ procedure Patch_Tests is
    begin
       Check
         (Name,
+         "      Convention    => C,"
+         & LF
+         & "      External_Name => ""ioctl"";",
+         "      Convention    => C_Variadic_2,"
+         & LF
+         & "      External_Name => ""ioctl"";",
+         "macOS ioctl uses the variadic ABI after its two fixed arguments",
+         "macos");
+      Check
+        (Name,
          Original,
          Linux,
          "Linux terminal ioctl, NUL key handling and guarded dimensions");
@@ -475,6 +511,7 @@ begin
    Check_Palette_Distance;
    Check_Composers;
    Check_Termios;
+   Check_Darwin_Resize_Signal;
    Check_Byte_Reading;
    Check_Terminal_Input;
    Check

@@ -4,7 +4,7 @@ Ada 2022와 Malef로 만든 로컬 TUI 일기장입니다. 월별 달력에서 �
 
 ## 실행
 
-Linux, UTF-8 터미널, Alire, GNAT 16.1, GPRbuild가 필요합니다. 빌드 보조 도구와 테스트도 Ada로 작성되어 Python 설치 없이 빌드·실행·테스트·릴리스할 수 있습니다. Bash와 PowerShell 스크립트는 플랫폼별 실행 절차를 연결합니다. 터미널은 최소 80열 × 27행이어야 합니다. 이 환경의 검증 도구 체인은 GNAT 16.1.0 / GPRbuild 26.0.1 / Alire 2.1.1입니다.
+Linux 또는 macOS, UTF-8 터미널, Alire, GNAT 16.1 이상, GPRbuild가 필요합니다. 빌드 보조 도구와 테스트도 Ada로 작성되어 Python 설치 없이 빌드·실행·테스트·릴리스할 수 있습니다. Bash와 PowerShell 스크립트는 플랫폼별 실행 절차를 연결합니다. 터미널은 최소 80열 × 27행이어야 합니다. 이 환경의 검증 도구 체인은 GNAT 16.1.0 / GPRbuild 26.0.1 / Alire 2.1.1입니다.
 
 ```bash
 make build
@@ -45,11 +45,11 @@ PowerShell에서는 다음과 같이 실행합니다.
 ./scripts/run.ps1 --data-dir "/tmp/my diary"
 ```
 
-`run.ps1`은 Linux에서는 Bash를, Windows에서는 기본 WSL 배포판의 Bash를 호출합니다. Windows에서는 WSL 안에 저장소와 Linux용 Alire, GNAT, GPRbuild, GNATformat을 준비하고, Alire와 GNATformat을 WSL 로그인 셸의 `PATH`에 추가해야 합니다. 앱 인자에 지정하는 저장 경로도 Linux 경로를 사용합니다.
+`run.ps1`은 Linux와 macOS에서는 Bash를, Windows에서는 기본 WSL 배포판의 Bash를 호출합니다. Windows에서는 WSL 안에 저장소와 Linux용 Alire, GNAT, GPRbuild, GNATformat을 준비하고, Alire와 GNATformat을 WSL 로그인 셸의 `PATH`에 추가해야 합니다. 앱 인자에 지정하는 저장 경로도 Linux 경로를 사용합니다.
 
-두 스크립트는 호출 위치와 관계없이 프로젝트 루트에서 Ada 소스 포맷팅 → GNAT 구문·의미 및 전체 경고 검사 → 앱·테스트 빌드 → Ada·저장소·TUI 테스트 → 앱 실행 순서로 진행합니다. 포맷팅은 `apps/`, `packages/*/src/`, `tests/`의 Ada 소스를 직접 수정하며 외부 의존성은 제외합니다. 린트 경고는 오류로 처리하며 검사 산출물은 별도 `lint/` 하위 디렉터리에 생성합니다. 어느 단계든 실패하면 즉시 종료하고, 스크립트에 전달한 인자는 앱에 그대로 전달합니다. 실제 화면을 사용하려면 UTF-8 대화형 터미널이 필요하며, 마지막 실행을 도움말로 확인하려면 `./scripts/run.sh --help`를 사용합니다.
+두 스크립트는 Linux와 macOS를 자동 감지하고, 호출 위치와 관계없이 프로젝트 루트에서 의존성 호환성 패치 적용 → Ada 소스 포맷팅 → GNAT 구문·의미 및 전체 경고 검사 → 앱·테스트 빌드 → Ada·저장소·TUI 테스트 → 앱 실행 순서로 진행합니다. 포맷팅은 `apps/`, `packages/*/src/`, `tests/`의 Ada 소스를 직접 수정하며 외부 의존성은 제외합니다. 린트 경고는 오류로 처리하며 검사 산출물은 별도 `lint/` 하위 디렉터리에 생성합니다. 어느 단계든 실패하면 즉시 종료하고, 스크립트에 전달한 인자는 앱에 그대로 전달합니다. Linux에서는 Malef의 `linux`/ANSI, macOS에서는 `unix`/ANSI 구현을 선택합니다. 릴리스 스크립트 회귀 검사도 실행하며, Linux 패키징 도구가 필요한 검사 항목은 macOS에서 자동으로 건너뜁니다. 실제 화면을 사용하려면 UTF-8 대화형 터미널이 필요하며, 마지막 실행을 도움말로 확인하려면 `./scripts/run.sh --help`를 사용합니다.
 
-처음 빌드할 때 인터넷으로 Malef를 내려받습니다. Malef는 Alire 인덱스에 등록되어 있지 않아 [공식 저장소](https://github.com/joseaverde/Malef)의 `79b20b6bab88ef2d66528d77fe7ec1a1f4ee4638` 커밋을 고정합니다. `scripts/prepare.sh`가 Alire pre-build 단계에서 독립적인 `tools.gpr`로 Ada 도구 `bin/diary_tools`를 빌드하고 GNAT 16의 이름 해석·타입 추론 호환성 수정을 적용합니다. 이 도구는 Malef에 의존하지 않습니다. 수정은 프로젝트 내부 의존성 캐시에만 적용되며 반복 실행이 가능합니다. 컴파일 호환성 외에 표준 입력 파일 디스크립터, 저장 단축키의 흐름 제어, 터미널 크기 조회도 보정합니다. 또한 `Ctrl+V`, `Ctrl+D`, `Ctrl+Space`가 터미널이나 Malef에서 가로채이지 않고 키 입력으로 전달되도록 합니다. 이에 따라 `Ctrl+D`는 더 이상 앱을 종료하지 않습니다. 이 과정은 원본의 라이선스 고지를 보존합니다.
+처음 빌드할 때 인터넷으로 Malef를 내려받습니다. Malef는 Alire 인덱스에 등록되어 있지 않아 [공식 저장소](https://github.com/joseaverde/Malef)의 `79b20b6bab88ef2d66528d77fe7ec1a1f4ee4638` 커밋을 고정합니다. `scripts/prepare.sh`가 Alire pre-build 단계에서 독립적인 `tools.gpr`로 Ada 도구 `bin/diary_tools`를 빌드하고 GNAT 16의 이름 해석·타입 추론 호환성 수정을 적용합니다. 이 도구는 Malef에 의존하지 않습니다. 수정은 프로젝트 내부 의존성 캐시에만 적용되며 반복 실행이 가능합니다. 컴파일 호환성 외에 표준 입력 파일 디스크립터, 저장 단축키의 흐름 제어, 터미널 크기 조회도 보정합니다. macOS에서는 `ioctl`의 가변 인자 호출 규약과 창 크기 변경 신호 처리도 보정합니다. 또한 `Ctrl+V`, `Ctrl+D`, `Ctrl+Space`가 터미널이나 Malef에서 가로채이지 않고 키 입력으로 전달되도록 합니다. 이에 따라 `Ctrl+D`는 더 이상 앱을 종료하지 않습니다. 이 과정은 원본의 라이선스 고지를 보존합니다.
 
 ## 릴리스와 설치파일
 
@@ -100,7 +100,7 @@ sudo installer -pkg ./dist/diary-1.0.0-macos-arm64.pkg -target /
 /usr/local/bin/diary --help
 ```
 
-macOS에서는 `macos-amd64` 또는 `macos-arm64` 이름의 실행 번들과 `.pkg`를 생성합니다. 설치 위치는 `/usr/local/bin/diary`와 `/usr/local/share/doc/ada-diary/`입니다. 릴리스 스크립트는 Malef의 `unix`/ANSI 구현을 선택하며 의존성 캐시에 호스트의 터미널 크기 상수와 macOS 표준 입력 심볼을 적용합니다. 현재 `run.sh`는 기존 Linux 전용 실행 경로를 유지하므로 macOS에서는 릴리스 번들의 실행파일을 사용합니다. `.pkg`는 서명·공증하지 않은 로컬 설치파일입니다.
+macOS에서는 `macos-amd64` 또는 `macos-arm64` 이름의 실행 번들과 `.pkg`를 생성합니다. 설치 위치는 `/usr/local/bin/diary`와 `/usr/local/share/doc/ada-diary/`입니다. 릴리스 스크립트는 Malef의 `unix`/ANSI 구현을 선택하며 의존성 캐시에 호스트의 터미널 크기 상수와 macOS 표준 입력 심볼을 적용합니다. 개발 중에는 macOS에서도 `./scripts/run.sh`로 포맷팅·린트·테스트 후 앱을 실행할 수 있습니다. `.pkg`는 서명·공증하지 않은 로컬 설치파일입니다.
 
 ### Windows 11
 
@@ -140,7 +140,7 @@ make test-build
 pwsh -NoProfile -File tests/release_windows_tests.ps1
 ```
 
-현재 Linux ARM64에서 전체 파이프라인과 실제 `.deb`·`.rpm` 생성 및 번들 실행을 검증했습니다. PowerShell 구문·프로세스 인자 처리도 검사했습니다. macOS 네이티브 빌드와 Windows 설치파일의 실제 설치·실행은 해당 OS에서 추가 검증이 필요합니다.
+현재 Linux ARM64에서 전체 파이프라인과 실제 `.deb`·`.rpm` 생성 및 번들 실행을 검증했습니다. PowerShell 구문·프로세스 인자 처리도 검사했습니다. macOS ARM64에서는 `./scripts/run.sh --help`의 포맷팅·린트·네이티브 빌드·저장소·TUI 테스트와 도움말 실행까지 검증했습니다. macOS `.pkg`와 Windows 설치파일의 실제 설치·실행은 해당 OS에서 추가 검증이 필요합니다.
 
 ## 기본 기능
 

@@ -287,6 +287,53 @@ package body Diary_Tooling_Patches is
              (Source, Declaration & " (", LF & "      ));", Implementation));
    end Patch_Composers;
 
+   function Patch_Resize_Signal (Source : String) return String is
+      Header  : constant String :=
+        "#ifdef __APPLE__"
+        & LF
+        & "#include <signal.h>"
+        & LF
+        & "static void (*diary_old_winch_handler) (int) = SIG_DFL;"
+        & LF
+        & "static void diary_winch_handler (int signum) { (void) signum; }"
+        & LF
+        & "#endif"
+        & LF;
+      Prepare : constant String := "void MALEF(prepare) (void) {";
+      Restore : constant String := "void MALEF(restore) (void) {";
+   begin
+      if Index (Source, "static void diary_winch_handler") /= 0 then
+         return Source;
+      end if;
+      -- Darwin discards default-ignored SIGWINCH even when sigwait waits for it.
+      -- A non-ignoring disposition lets the Ada interrupt task receive it.
+      return
+        Replace
+          (Replace
+             (Replace
+                (Source,
+                 "#include <termios.h>",
+                 Header & "#include <termios.h>"),
+              Prepare,
+              Prepare
+              & LF
+              & "#ifdef __APPLE__"
+              & LF
+              & "  diary_old_winch_handler = signal (SIGWINCH, diary_winch_handler);"
+              & LF
+              & "#endif"),
+           Restore,
+           Restore
+           & LF
+           & "#ifdef __APPLE__"
+           & LF
+           & "  if (diary_old_winch_handler != SIG_ERR)"
+           & LF
+           & "    signal (SIGWINCH, diary_old_winch_handler);"
+           & LF
+           & "#endif");
+   end Patch_Resize_Signal;
+
    function Patch_Termios (Source : String) return String is
       Canonical    : constant String :=
         "  new_term.c_lflag &= ~ICANON & ~ECHO;";
@@ -381,8 +428,17 @@ package body Diary_Tooling_Patches is
         & "      end if;";
       Platform_Code      : constant String :=
         Patch_Window_Size_Code (Source, Platform);
+      Variadic_Ioctl     : constant String :=
+        Replace
+          (Platform_Code,
+           "      Convention    => C,"
+           & LF
+           & "      External_Name => ""ioctl"";",
+           "      Convention    => C_Variadic_2,"
+           & LF
+           & "      External_Name => ""ioctl"";");
       Accepted_Nul       : constant String :=
-        Replace (Platform_Code, Nul_Check, Escape_Check);
+        Replace (Variadic_Ioctl, Nul_Check, Escape_Check);
    begin
       return Replace (Accepted_Nul, Dimensions, Guarded_Dimensions);
    end Patch_Terminal_Input;
@@ -407,7 +463,7 @@ package body Diary_Tooling_Patches is
       elsif Name
         = "subsystems/ansi/posix/__malef-platform-terminal-input-implementation.c"
       then
-         return Patch_Termios (Source);
+         return Patch_Resize_Signal (Patch_Termios (Source));
       elsif Name
         = "subsystems/ansi/posix/malef-platform-terminal-input-get_byte_immediate.adb"
       then

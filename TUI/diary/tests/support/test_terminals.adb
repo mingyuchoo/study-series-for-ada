@@ -277,10 +277,21 @@ package body Test_Terminals is
       Status : Integer;
    begin
       Test_Processes.Wait_For_Exit (Object.Child, 3.0, Status);
-      Check
-        (Read_Mode (Handle (Object.Slave), Object.Original.Host)
-         = Object.Original,
-         "Terminal mode was not restored");
+      declare
+         Restored      : Terminal_Mode :=
+           Read_Mode (Handle (Object.Slave), Object.Original.Host);
+         Original      : Terminal_Mode := Object.Original;
+         -- Darwin's PENDIN reports pending input, not a terminal setting.
+         Pending_Input : constant unsigned_long := 16#2000_0000#;
+      begin
+         if Original.Host = Darwin then
+            Restored.Darwin_Mode.Local_Flags :=
+              Restored.Darwin_Mode.Local_Flags and not Pending_Input;
+            Original.Darwin_Mode.Local_Flags :=
+              Original.Darwin_Mode.Local_Flags and not Pending_Input;
+         end if;
+         Check (Restored = Original, "Terminal mode was not restored");
+      end;
       Object.Mode_Saved := False;
       if Status /= 0 then
          raise Program_Error

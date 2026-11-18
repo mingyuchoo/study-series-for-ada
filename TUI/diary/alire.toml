@@ -26,8 +26,11 @@ malef = { url = "https://github.com/joseaverde/Malef.git", commit = "79b20b6bab8
 "*".ada_version = "Ada2022"
 
 [gpr-set-externals]
-MALEF_SYSTEM = "linux"
 MALEF_SUBSYSTEM = "ansi"
+
+[gpr-set-externals.'case(os)']
+linux = { MALEF_SYSTEM = "linux" }
+macos = { MALEF_SYSTEM = "unix" }
 
 [[actions]]
 type = "pre-build"
