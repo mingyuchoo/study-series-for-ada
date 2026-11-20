@@ -61,6 +61,9 @@ package body Diary_Calendar_Commands is
                when 'm' | 'M'                        =>
                   return Switch_Keymap;
 
+               when 's' | 'S'                        =>
+                  return Open_Settings;
+
                when others                           =>
                   null;
             end case;

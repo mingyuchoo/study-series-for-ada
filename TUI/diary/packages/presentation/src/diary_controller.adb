@@ -2,6 +2,7 @@ with Ada.Characters.Conversions;
 with Ada.Containers.Vectors;
 with Ada.Exceptions;
 with Ada.Strings.Wide_Wide_Unbounded;
+with Ada.Strings.UTF_Encoding.Wide_Wide_Strings;
 with Diary_Calendar_Commands;
 with Diary_Editor;
 with Diary_Entries;
@@ -20,6 +21,8 @@ package body Diary_Controller is
    use type Diary_Keymaps.Kind;
    package Buffer_Vectors is new
      Ada.Containers.Vectors (Positive, Diary_Editor.Text_Buffer);
+   package Text_Vectors is new
+     Ada.Containers.Vectors (Positive, Unbounded_Wide_Wide_String);
    type History is record
       Undo, Redo : Buffer_Vectors.Vector;
    end record;
@@ -41,10 +44,14 @@ package body Diary_Controller is
      Wide_Wide_Character'Val (14);
    Ctrl_P        : constant Wide_Wide_Character :=
      Wide_Wide_Character'Val (16);
+   Ctrl_R        : constant Wide_Wide_Character :=
+     Wide_Wide_Character'Val (18);
    Ctrl_S        : constant Wide_Wide_Character :=
      Wide_Wide_Character'Val (19);
    Ctrl_W        : constant Wide_Wide_Character :=
      Wide_Wide_Character'Val (23);
+   Ctrl_V        : constant Wide_Wide_Character :=
+     Wide_Wide_Character'Val (22);
    Ctrl_X        : constant Wide_Wide_Character :=
      Wide_Wide_Character'Val (24);
    Ctrl_Y        : constant Wide_Wide_Character :=
@@ -54,18 +61,31 @@ package body Diary_Controller is
    Rubout_Key    : constant Wide_Wide_Character :=
      Wide_Wide_Character'Val (127);
    procedure Run
-     (Store  : in out Diary_Repositories.Repository'Class;
-      Screen : in out Diary_Screen.Port'Class;
-      Today  : Diary_Dates.Date;
-      Keymap : Diary_Keymaps.Kind := Diary_Keymaps.Emacs)
+     (Store    : in out Diary_Repositories.Repository'Class;
+      Screen   : in out Diary_Screen.Port'Class;
+      Today    : Diary_Dates.Date;
+      Keymap   : Diary_Keymaps.Kind := Diary_Keymaps.Emacs;
+      Bindings : Diary_Bindings.Binding_Table := Diary_Bindings.Defaults)
    is
-      State     : Diary_Screen_State.State;
-      Event     : Input_Event;
-      Finished  : Boolean := False;
-      Histories : array (Edit_Field) of History;
-      Register  : Unbounded_Wide_Wide_String;
-      Prefix    : Prefix_Kind := No_Prefix;
-      Typing    : Boolean := False;
+      State                        : Diary_Screen_State.State;
+      Event                        : Input_Event;
+      Finished                     : Boolean := False;
+      Histories                    : array (Edit_Field) of History;
+      Register                     : Unbounded_Wide_Wide_String;
+      Prefix                       : Prefix_Kind := No_Prefix;
+      Typing                       : Boolean := False;
+      Kill_Ring                    : Text_Vectors.Vector;
+      Last_Kill, Last_Yank         : Boolean := False;
+      Yank_From, Yank_To           : Natural := 0;
+      Ring_Index                   : Positive := 1;
+      Count                        : Natural := 0;
+      Pending_Find                 : Wide_Wide_Character := ' ';
+      Last_Find, Last_Find_Char    : Wide_Wide_Character := ' ';
+      Find_Count                   : Positive := 1;
+      Search_Origin, Search_Anchor : Natural := 0;
+      Search_Mark                  : Boolean := False;
+      Last_Search                  : Unbounded_Wide_Wide_String;
+      Binding_Pending              : Diary_Bindings.Key_Sequence;
       procedure Message (Text : Wide_Wide_String) is
       begin
          State.Message := To_Unbounded_Wide_Wide_String (Text);
@@ -108,6 +128,10 @@ package body Diary_Controller is
          State.Prompt_Shown := False;
          Prefix := No_Prefix;
          Typing := False;
+         Count := 0;
+         Pending_Find := ' ';
+         Last_Kill := False;
+         Last_Yank := False;
          for Item of Histories loop
             Item.Undo.Clear;
             Item.Redo.Clear;
@@ -115,8 +139,9 @@ package body Diary_Controller is
          Message
            ((if State.Keymap = Diary_Keymaps.Helix
              then
-               "Normal mode: i inserts, :w saves, :q closes. Title is required."
-             else "Ctrl+S saves; Esc cancels. Title is required."));
+               "Normal mode. See your keys below; :w saves, :q closes. Title required."
+             else
+               "Use the keys shown below to save, search or close. Title is required."));
       end Begin_Edit;
       procedure Save (Stay : Boolean := False) is
          Item   : constant Diary_Entries.Entry_Data :=
@@ -182,6 +207,10 @@ package body Diary_Controller is
          end if;
          Prefix := No_Prefix;
          Typing := False;
+         Count := 0;
+         Pending_Find := ' ';
+         Last_Kill := False;
+         Last_Yank := False;
       end Switch_Field;
       procedure Checkpoint (Buffer : Diary_Editor.Text_Buffer) is
          Item : History renames Histories (State.Field);
@@ -248,6 +277,85 @@ package body Diary_Controller is
          end loop;
          return To_Wide_Wide_String (Result);
       end Pasted;
+      procedure Start_Search (Backwards : Boolean) is
+      begin
+         State.Prompt_Shown := True;
+         State.Prompt_Kind :=
+           (if Backwards then Search_Backward else Search_Forward);
+         State.Prompt := Null_Unbounded_Wide_Wide_String;
+         Search_Origin :=
+           Diary_Editor.Position
+             ((if State.Field = Title_Field
+               then State.Title
+               else State.Content));
+         Search_Anchor := State.Anchor;
+         Search_Mark := State.Mark_Active;
+         Prefix := No_Prefix;
+         Typing := False;
+         Last_Kill := False;
+         Last_Yank := False;
+         Message ("");
+      end Start_Search;
+      procedure Search
+        (Buffer         : in out Diary_Editor.Text_Buffer;
+         Query          : Wide_Wide_String;
+         Origin         : Natural;
+         Backwards      : Boolean;
+         Include_Origin : Boolean := True)
+      is
+         Value  : constant Wide_Wide_String := Diary_Editor.Text (Buffer);
+         Length : constant Natural := Value'Length;
+         Offset : Natural;
+         Start  : Natural;
+      begin
+         if Query'Length = 0 then
+            return;
+         elsif Length > 0 and then Query'Length <= Length then
+            if Backwards and then State.Keymap = Diary_Keymaps.Emacs then
+               -- Emacs point sits before a backward match: its end must not
+               -- extend beyond the original point. Wrap if there is no room.
+               Start :=
+                 (if Origin >= Query'Length
+                  then Natural'Min (Origin - Query'Length, Length - 1)
+                  else Length - 1);
+            else
+               Start :=
+                 (if Backwards
+                  then Natural'Min (Origin, Length - 1)
+                  else Origin mod Length);
+            end if;
+            if not Include_Origin then
+               Start :=
+                 (if Backwards
+                  then (Start + Length - 1) mod Length
+                  else (Start + 1) mod Length);
+            end if;
+            for Distance in 0 .. Length - 1 loop
+               Offset :=
+                 (if Backwards
+                  then (Start + Length - Distance) mod Length
+                  else (Start + Distance) mod Length);
+               if Offset + Query'Length <= Length
+                 and then Value (Offset + 1 .. Offset + Query'Length) = Query
+               then
+                  if State.Keymap = Diary_Keymaps.Helix then
+                     if State.Modal /= Select_Mode then
+                        State.Anchor := Offset;
+                     end if;
+                     Diary_Editor.Set_Position
+                       (Buffer, Offset + Query'Length - 1);
+                  else
+                     Diary_Editor.Set_Position
+                       (Buffer,
+                        (if Backwards then Offset else Offset + Query'Length));
+                  end if;
+                  Message ("");
+                  return;
+               end if;
+            end loop;
+         end if;
+         Message ("Pattern not found");
+      end Search;
       procedure Insert_Key
         (Buffer : in out Diary_Editor.Text_Buffer; Is_Title : Boolean) is
       begin
@@ -274,12 +382,45 @@ package body Diary_Controller is
       is
          use Diary_Editor;
          Was_Typing : constant Boolean := Typing;
+         Was_Kill   : constant Boolean := Last_Kill;
+         Was_Yank   : constant Boolean := Last_Yank;
          Point      : constant Natural := Position (Buffer);
+         procedure Remember
+           (Value      : Wide_Wide_String;
+            Backwards  : Boolean := False;
+            Accumulate : Boolean := False) is
+         begin
+            if Value'Length = 0 then
+               return;
+            end if;
+            if Accumulate and then Was_Kill and then not Kill_Ring.Is_Empty
+            then
+               Kill_Ring.Replace_Element
+                 (1,
+                  To_Unbounded_Wide_Wide_String
+                    ((if Backwards
+                      then
+                        Value & To_Wide_Wide_String (Kill_Ring.First_Element)
+                      else
+                        To_Wide_Wide_String (Kill_Ring.First_Element)
+                        & Value)));
+            else
+               Kill_Ring.Prepend (To_Unbounded_Wide_Wide_String (Value));
+               if Natural (Kill_Ring.Length) > 32 then
+                  Kill_Ring.Delete_Last;
+               end if;
+            end if;
+            Register := Kill_Ring.First_Element;
+         end Remember;
          procedure Kill (From, To : Natural) is
+            Value : constant Wide_Wide_String := Text (Buffer);
          begin
             if To > From then
                Checkpoint (Buffer);
-               Take (Buffer, From, To, Remove => True);
+               Remember
+                 (Value (From + 1 .. To), From < Point, Accumulate => True);
+               Diary_Editor.Remove (Buffer, From, To);
+               Last_Kill := True;
             end if;
             State.Mark_Active := False;
          end Kill;
@@ -293,21 +434,46 @@ package body Diary_Controller is
                Kill (From, To);
             else
                Take (Buffer, From, To, Remove => False);
+               Remember (To_Wide_Wide_String (Register));
                State.Mark_Active := False;
                Message ("Region copied");
             end if;
          end Region;
-         procedure Yank is
-            Value : constant Wide_Wide_String := Pasted (Is_Title);
+         procedure Yank (Rotate : Boolean := False) is
          begin
-            if Value'Length > 0 then
-               Checkpoint (Buffer);
-               Insert (Buffer, Value);
-               State.Mark_Active := False;
+            if Rotate and then not Was_Yank then
+               Message ("M-y must follow C-y or M-y");
+               return;
+            elsif Kill_Ring.Is_Empty then
+               Message ("Kill ring is empty");
+               return;
             end if;
+            if Rotate then
+               Ring_Index := Ring_Index mod Positive (Kill_Ring.Length) + 1;
+            else
+               Ring_Index := 1;
+            end if;
+            Register := Kill_Ring.Element (Ring_Index);
+            declare
+               Value : constant Wide_Wide_String := Pasted (Is_Title);
+            begin
+               Checkpoint (Buffer);
+               if Rotate then
+                  Diary_Editor.Remove (Buffer, Yank_From, Yank_To);
+               else
+                  Yank_From := Position (Buffer);
+               end if;
+               Insert (Buffer, Value);
+               Yank_To := Position (Buffer);
+               State.Anchor := Yank_From;
+               State.Mark_Active := False;
+               Last_Yank := True;
+            end;
          end Yank;
       begin
          Typing := False;
+         Last_Kill := False;
+         Last_Yank := False;
          if Prefix = Control_X_Prefix then
             Prefix := No_Prefix;
             if Event.Kind = Character_Key then
@@ -320,6 +486,11 @@ package body Diary_Controller is
 
                   when 'k' | 'K' =>
                      Close_Editor;
+
+                  when Ctrl_X    =>
+                     Set_Position (Buffer, State.Anchor);
+                     State.Anchor := Point;
+                     State.Mark_Active := True;
 
                   when others    =>
                      Message ("C-x: C-s save, u undo, k close");
@@ -365,38 +536,50 @@ package body Diary_Controller is
                   when 'w' | 'W'                  =>
                      Region (Remove => False);
 
+                  when 'y' | 'Y'                  =>
+                     Yank (Rotate => True);
+
+                  when 'v' | 'V'                  =>
+                     for Page_Line in 1 .. 10 loop
+                        Move (Buffer, Upward);
+                     end loop;
+
                   when others                     =>
                      null;
                end case;
 
             when Character_Key =>
                case Event.Letter is
-                  when Ctrl_Space =>
+                  when Ctrl_Space      =>
                      State.Anchor := Point;
                      State.Mark_Active := True;
                      Message ("Mark set");
 
-                  when Ctrl_A     =>
+                  when Ctrl_A          =>
                      Move (Buffer, Line_Start);
 
-                  when Ctrl_B     =>
+                  when Ctrl_B          =>
                      Move (Buffer, Backward);
 
-                  when Ctrl_D     =>
-                     Kill (Point, Natural'Min (Size (Buffer), Point + 1));
-                     Register := Null_Unbounded_Wide_Wide_String;
+                  when Ctrl_D          =>
+                     if Point < Size (Buffer) then
+                        Checkpoint (Buffer);
+                        Diary_Editor.Remove (Buffer, Point, Point + 1);
+                     end if;
+                     State.Mark_Active := False;
+                     State.Anchor := Natural'Min (State.Anchor, Size (Buffer));
 
-                  when Ctrl_E     =>
+                  when Ctrl_E          =>
                      Move (Buffer, Line_End);
 
-                  when Ctrl_F     =>
+                  when Ctrl_F          =>
                      Move (Buffer, Forward);
 
-                  when Ctrl_G     =>
+                  when Ctrl_G          =>
                      State.Mark_Active := False;
                      Message ("Quit");
 
-                  when Ctrl_K     =>
+                  when Ctrl_K          =>
                      Move (Buffer, Line_End);
                      Kill
                        (Point,
@@ -404,25 +587,33 @@ package body Diary_Controller is
                          then Natural'Min (Size (Buffer), Point + 1)
                          else Position (Buffer)));
 
-                  when Ctrl_N     =>
+                  when Ctrl_N          =>
                      Move (Buffer, Downward);
 
-                  when Ctrl_P     =>
+                  when Ctrl_P          =>
                      Move (Buffer, Upward);
 
-                  when Ctrl_W     =>
+                  when Ctrl_S | Ctrl_R =>
+                     Start_Search (Event.Letter = Ctrl_R);
+
+                  when Ctrl_V          =>
+                     for Page_Line in 1 .. 10 loop
+                        Move (Buffer, Downward);
+                     end loop;
+
+                  when Ctrl_W          =>
                      Region (Remove => True);
 
-                  when Ctrl_X     =>
+                  when Ctrl_X          =>
                      Prefix := Control_X_Prefix;
 
-                  when Ctrl_Y     =>
+                  when Ctrl_Y          =>
                      Yank;
 
-                  when Ctrl_Slash =>
+                  when Ctrl_Slash      =>
                      Undo (Buffer);
 
-                  when others     =>
+                  when others          =>
                      if not Was_Typing then
                         Checkpoint (Buffer);
                      end if;
@@ -439,6 +630,7 @@ package body Diary_Controller is
       begin
          State.Prompt := Null_Unbounded_Wide_Wide_String;
          State.Prompt_Shown := True;
+         State.Prompt_Kind := Command_Prompt;
          Prefix := No_Prefix;
          Message ("");
       end Show_Prompt;
@@ -446,13 +638,16 @@ package body Diary_Controller is
         (Buffer : in out Diary_Editor.Text_Buffer; Is_Title : Boolean)
       is
          use Diary_Editor;
-         Point : constant Natural := Position (Buffer);
-         From  : constant Natural := Natural'Min (State.Anchor, Point);
-         Last  : constant Natural := Natural'Max (State.Anchor, Point);
-         To    : constant Natural := Natural'Min (Size (Buffer), Last + 1);
+         Point   : constant Natural := Position (Buffer);
+         From    : constant Natural := Natural'Min (State.Anchor, Point);
+         Last    : constant Natural := Natural'Max (State.Anchor, Point);
+         To      : constant Natural := Natural'Min (Size (Buffer), Last + 1);
+         Repeats : constant Positive := Positive'Max (1, Count);
          procedure Step (Direction : Movement) is
          begin
-            Move (Buffer, Direction);
+            for Repetition in 1 .. Repeats loop
+               Move (Buffer, Direction);
+            end loop;
             if State.Modal /= Select_Mode then
                State.Anchor := Position (Buffer);
             end if;
@@ -460,12 +655,64 @@ package body Diary_Controller is
          procedure Word (Motion : Word_Motion) is
             Anchor, Head : Natural;
          begin
-            Word_Range (Buffer, Motion, Anchor, Head);
-            if State.Modal /= Select_Mode then
-               State.Anchor := Anchor;
-            end if;
-            Set_Position (Buffer, Head);
+            for Repetition in 1 .. Repeats loop
+               Word_Range (Buffer, Motion, Anchor, Head);
+               if State.Modal /= Select_Mode and then Repetition = 1 then
+                  State.Anchor := Anchor;
+               end if;
+               Set_Position (Buffer, Head);
+            end loop;
          end Word;
+         procedure Find_Character
+           (Motion, Letter : Wide_Wide_Character; Repeat : Boolean := False)
+         is
+            Value     : constant Wide_Wide_String := Text (Buffer);
+            Target    : Natural := Point;
+            Backwards : constant Boolean := Motion in 'F' | 'T';
+            Found     : Boolean;
+         begin
+            if Repeat then
+               if Motion = 't'
+                 and then Target + 1 < Value'Length
+                 and then Value (Target + 2) = Letter
+               then
+                  Target := Target + 1;
+               elsif Motion = 'T'
+                 and then Target > 0
+                 and then Value (Target) = Letter
+               then
+                  Target := Target - 1;
+               end if;
+            end if;
+            for Repetition in 1 .. Find_Count loop
+               Found := False;
+               while (if Backwards
+                      then Target > 0
+                      else Target + 1 < Value'Length)
+               loop
+                  Target := (if Backwards then Target - 1 else Target + 1);
+                  if Value (Target + 1) = Letter then
+                     Found := True;
+                     exit;
+                  end if;
+               end loop;
+               if not Found then
+                  Message ("Character not found");
+                  return;
+               end if;
+            end loop;
+            if Motion = 't' then
+               Target := Target - 1;
+            elsif Motion = 'T' then
+               Target := Target + 1;
+            end if;
+            if State.Modal /= Select_Mode then
+               State.Anchor := Point;
+            end if;
+            Set_Position (Buffer, Target);
+            Last_Find := Motion;
+            Last_Find_Char := Letter;
+         end Find_Character;
          procedure Start_Insert (Target : Natural) is
          begin
             Checkpoint (Buffer);
@@ -482,11 +729,16 @@ package body Diary_Controller is
             return Position (Probe);
          end Line_Edge;
          procedure Select_Line is
-            First : constant Natural := Line_Edge (From, Line_Start);
-            Final : Natural := Line_Edge (Last, Line_End);
+            Current_From : constant Natural :=
+              Natural'Min (State.Anchor, Position (Buffer));
+            Current_Last : constant Natural :=
+              Natural'Max (State.Anchor, Position (Buffer));
+            First        : constant Natural :=
+              Line_Edge (Current_From, Line_Start);
+            Final        : Natural := Line_Edge (Current_Last, Line_End);
          begin
-            if From = First
-              and then Last = Final
+            if Current_From = First
+              and then Current_Last = Final
               and then Final < Size (Buffer)
             then
                Final := Line_Edge (Final + 1, Line_End);
@@ -512,39 +764,48 @@ package body Diary_Controller is
             State.Anchor := Position (Buffer);
          end Open_Line;
          procedure Paste (After : Boolean) is
-            Value    : constant Wide_Wide_String := Pasted (Is_Title);
-            Linewise : constant Boolean :=
-              Value'Length > 0 and then Value (Value'Last) = Newline;
-            Target   : Natural;
+            Repeated : Unbounded_Wide_Wide_String;
          begin
-            if Value'Length = 0 then
-               Message ("Nothing to paste");
-               return;
-            end if;
-            Checkpoint (Buffer);
-            if not Linewise then
-               Target := (if After then To else From);
-            elsif not After then
-               Target := Line_Edge (From, Line_Start);
-            else
-               Target := Line_Edge (Last, Line_End);
-               if Target = Size (Buffer) then
-                  Set_Position (Buffer, Target);
-                  Insert (Buffer, Newline);
+            for Repetition in 1 .. Repeats loop
+               Append (Repeated, Pasted (Is_Title));
+            end loop;
+            declare
+               Value    : constant Wide_Wide_String :=
+                 To_Wide_Wide_String (Repeated);
+               Linewise : constant Boolean :=
+                 Value'Length > 0 and then Value (Value'Last) = Newline;
+               Target   : Natural;
+            begin
+               if Value'Length = 0 then
+                  Message ("Nothing to paste");
+                  return;
                end if;
-               Target := Target + 1;
-            end if;
-            Set_Position (Buffer, Target);
-            Insert (Buffer, Value);
-            State.Anchor := Target;
-            Set_Position (Buffer, Target + Value'Length - 1);
-            State.Modal := Normal_Mode;
+               Checkpoint (Buffer);
+               if not Linewise then
+                  Target := (if After then To else From);
+               elsif not After then
+                  Target := Line_Edge (From, Line_Start);
+               else
+                  Target := Line_Edge (Last, Line_End);
+                  if Target = Size (Buffer) then
+                     Set_Position (Buffer, Target);
+                     Insert (Buffer, Newline);
+                  end if;
+                  Target := Target + 1;
+               end if;
+               Set_Position (Buffer, Target);
+               Insert (Buffer, Value);
+               State.Anchor := Target;
+               Set_Position (Buffer, Target + Value'Length - 1);
+               State.Modal := Normal_Mode;
+            end;
          end Paste;
       begin
          if State.Modal = Insert_Mode then
             case Event.Kind is
                when Escape_Key    =>
                   State.Modal := Normal_Mode;
+                  Move (Buffer, Backward);
 
                when Left_Key      =>
                   Move (Buffer, Backward);
@@ -579,6 +840,49 @@ package body Diary_Controller is
             end if;
             return;
          end if;
+         if Event.Kind = Escape_Key then
+            Count := 0;
+            Pending_Find := ' ';
+         elsif Pending_Find /= ' ' then
+            if Event.Kind = Character_Key
+              and then Wide_Wide_Character'Pos (Event.Letter) >= 32
+            then
+               if Pending_Find = 'r' then
+                  if To > From then
+                     declare
+                        Value : Wide_Wide_String :=
+                          Text (Buffer) (From + 1 .. To);
+                     begin
+                        for Letter of Value loop
+                           if Letter /= Newline then
+                              Letter := Event.Letter;
+                           end if;
+                        end loop;
+                        Checkpoint (Buffer);
+                        Diary_Editor.Remove (Buffer, From, To);
+                        Insert (Buffer, Value);
+                        State.Anchor := From;
+                        Set_Position (Buffer, To - 1);
+                     end;
+                  end if;
+               else
+                  Find_Character (Pending_Find, Event.Letter);
+               end if;
+            end if;
+            Pending_Find := ' ';
+            Count := 0;
+            return;
+         elsif Event.Kind = Character_Key and then Event.Letter in '0' .. '9'
+         then
+            Count :=
+              Natural'Min
+                (9999,
+                 Count
+                 * 10
+                 + Wide_Wide_Character'Pos (Event.Letter)
+                 - Wide_Wide_Character'Pos ('0'));
+            return;
+         end if;
          case Event.Kind is
             when Escape_Key    =>
                State.Modal := Normal_Mode;
@@ -595,6 +899,15 @@ package body Diary_Controller is
 
             when Down_Key      =>
                Step (Downward);
+
+            when Meta_Key      =>
+               if Event.Letter = ';' then
+                  Set_Position (Buffer, State.Anchor);
+                  State.Anchor := Point;
+               elsif Event.Letter = '.' and then Last_Find /= ' ' then
+                  Find_Count := Repeats;
+                  Find_Character (Last_Find, Last_Find_Char, Repeat => True);
+               end if;
 
             when Character_Key =>
                if Prefix = Goto_Prefix then
@@ -615,74 +928,83 @@ package body Diary_Controller is
                      when others =>
                         null;
                   end case;
+                  Count := 0;
                   return;
                end if;
                case Event.Letter is
-                  when 'h'    =>
+                  when 'h'                         =>
                      Step (Backward);
 
-                  when 'l'    =>
+                  when 'l'                         =>
                      Step (Forward);
 
-                  when 'j'    =>
+                  when 'j'                         =>
                      Step (Downward);
 
-                  when 'k'    =>
+                  when 'k'                         =>
                      Step (Upward);
 
-                  when Ctrl_A =>
+                  when Ctrl_A                      =>
                      Step (Line_Start);
 
-                  when Ctrl_E =>
+                  when Ctrl_E                      =>
                      Step (Line_End);
 
-                  when 'w'    =>
+                  when 'w'                         =>
                      Word (Next_Word_Start);
 
-                  when 'e'    =>
+                  when 'e'                         =>
                      Word (Next_Word_End);
 
-                  when 'b'    =>
+                  when 'b'                         =>
                      Word (Previous_Word_Start);
 
-                  when 'g'    =>
+                  when 'g'                         =>
                      Prefix := Goto_Prefix;
+                     return;
 
-                  when 'x'    =>
-                     Select_Line;
+                  when 'f' | 'F' | 't' | 'T' | 'r' =>
+                     Pending_Find := Event.Letter;
+                     Find_Count := Repeats;
+                     return;
 
-                  when '%'    =>
+                  when 'x'                         =>
+                     for Repetition in 1 .. Repeats loop
+                        Select_Line;
+                     end loop;
+
+                  when '%'                         =>
                      State.Anchor := 0;
                      Set_Position (Buffer, Size (Buffer));
 
-                  when ';'    =>
+                  when ';'                         =>
                      State.Anchor := Point;
 
-                  when 'v'    =>
+                  when 'v'                         =>
                      State.Modal :=
                        (if State.Modal = Select_Mode
                         then Normal_Mode
                         else Select_Mode);
 
-                  when 'i'    =>
+                  when 'i'                         =>
                      Start_Insert (From);
 
-                  when 'a'    =>
+                  when 'a'                         =>
                      Start_Insert (To);
 
-                  when 'I'    =>
+                  when 'I'                         =>
                      Start_Insert (Line_Edge (From, Line_Start));
 
-                  when 'A'    =>
+                  when 'A'                         =>
                      Start_Insert (Line_Edge (Last, Line_End));
 
-                  when 'o'    =>
+                  when 'o'                         =>
                      Open_Line (Below => True);
 
-                  when 'O'    =>
+                  when 'O'                         =>
                      Open_Line (Below => False);
 
-                  when 'd'    =>
+                  when 'd'                         =>
                      if To > From then
                         Checkpoint (Buffer);
                         Take (Buffer, From, To, Remove => True);
@@ -690,7 +1012,7 @@ package body Diary_Controller is
                      State.Anchor := Position (Buffer);
                      State.Modal := Normal_Mode;
 
-                  when 'c'    =>
+                  when 'c'                         =>
                      Checkpoint (Buffer);
                      if To > From then
                         Take (Buffer, From, To, Remove => True);
@@ -698,35 +1020,52 @@ package body Diary_Controller is
                      State.Anchor := Position (Buffer);
                      State.Modal := Insert_Mode;
 
-                  when 'y'    =>
+                  when 'y'                         =>
                      Take (Buffer, From, To, Remove => False);
                      State.Modal := Normal_Mode;
                      Message ("Selection yanked");
 
-                  when 'p'    =>
+                  when 'p'                         =>
                      Paste (After => True);
 
-                  when 'P'    =>
+                  when 'P'                         =>
                      Paste (After => False);
 
-                  when 'u'    =>
+                  when 'u'                         =>
                      Undo (Buffer);
                      State.Modal := Normal_Mode;
 
-                  when 'U'    =>
+                  when 'U'                         =>
                      Redo (Buffer);
                      State.Modal := Normal_Mode;
 
-                  when ':'    =>
+                  when ':'                         =>
                      Show_Prompt;
 
-                  when others =>
+                  when '/' | '?'                   =>
+                     Start_Search (Event.Letter = '?');
+
+                  when 'n' | 'N'                   =>
+                     for Repetition in 1 .. Repeats loop
+                        Search
+                          (Buffer,
+                           To_Wide_Wide_String (Last_Search),
+                           (if Event.Letter = 'N'
+                            then Natural'Min (State.Anchor, Position (Buffer))
+                            else
+                              Natural'Max (State.Anchor, Position (Buffer))),
+                           Event.Letter = 'N',
+                           False);
+                     end loop;
+
+                  when others                      =>
                      null;
                end case;
 
             when others        =>
                null;
          end case;
+         Count := 0;
       end Helix_Edit;
       procedure Handle_Editor is
       begin
@@ -744,11 +1083,6 @@ package body Diary_Controller is
          elsif Event.Kind = Escape_Key then
             Prefix := No_Prefix;
             Close_Editor;
-         elsif Prefix = No_Prefix
-           and then Event.Kind = Character_Key
-           and then Event.Letter = Ctrl_S
-         then
-            Save;
          elsif State.Field = Title_Field then
             Emacs_Edit (State.Title, True);
          else
@@ -785,32 +1119,106 @@ package body Diary_Controller is
          end if;
       end Run_Command;
       procedure Handle_Prompt is
-         Command : constant Wide_Wide_String :=
+         Command   : constant Wide_Wide_String :=
            To_Wide_Wide_String (State.Prompt);
+         Searching : constant Boolean := State.Prompt_Kind /= Command_Prompt;
+         procedure Restore_Search is
+         begin
+            if State.Field = Title_Field then
+               Diary_Editor.Set_Position (State.Title, Search_Origin);
+            else
+               Diary_Editor.Set_Position (State.Content, Search_Origin);
+            end if;
+            State.Anchor := Search_Anchor;
+            State.Mark_Active := Search_Mark;
+         end Restore_Search;
+         procedure Update_Search (Repeat : Boolean := False) is
+            Backwards : constant Boolean :=
+              State.Prompt_Kind = Search_Backward;
+         begin
+            if State.Field = Title_Field then
+               Search
+                 (State.Title,
+                  To_Wide_Wide_String (State.Prompt),
+                  (if Repeat
+                   then Diary_Editor.Position (State.Title)
+                   else Search_Origin),
+                  Backwards,
+                  not Repeat or else State.Keymap = Diary_Keymaps.Emacs);
+            else
+               Search
+                 (State.Content,
+                  To_Wide_Wide_String (State.Prompt),
+                  (if Repeat
+                   then Diary_Editor.Position (State.Content)
+                   else Search_Origin),
+                  Backwards,
+                  not Repeat or else State.Keymap = Diary_Keymaps.Emacs);
+            end if;
+         end Update_Search;
       begin
-         if Event.Kind = Escape_Key then
+         if Event.Kind = Escape_Key
+           or else (Event.Kind = Character_Key and then Event.Letter = Ctrl_G)
+         then
+            if Searching then
+               if State.Keymap = Diary_Keymaps.Helix
+                 or else Event.Kind /= Escape_Key
+               then
+                  Restore_Search;
+                  Message ("Search cancelled");
+               else
+                  Last_Search := State.Prompt;
+               end if;
+            end if;
             State.Prompt_Shown := False;
          elsif Event.Kind = Character_Key then
-            case Wide_Wide_Character'Pos (Event.Letter) is
-               when 8 | 127   =>
-                  if Command'Length = 0 then
+            if Searching and then Event.Letter in Ctrl_S | Ctrl_R then
+               State.Prompt_Kind :=
+                 (if Event.Letter = Ctrl_R
+                  then Search_Backward
+                  else Search_Forward);
+               if Length (State.Prompt) = 0 then
+                  State.Prompt := Last_Search;
+               end if;
+               Update_Search (Repeat => True);
+            else
+               case Wide_Wide_Character'Pos (Event.Letter) is
+                  when 8 | 127                       =>
+                     if Command'Length = 0 then
+                        if Searching then
+                           Restore_Search;
+                        end if;
+                        State.Prompt_Shown := False;
+                     else
+                        State.Prompt :=
+                          To_Unbounded_Wide_Wide_String
+                            (Command (Command'First .. Command'Last - 1));
+                        if Searching then
+                           Restore_Search;
+                           Update_Search;
+                        end if;
+                     end if;
+
+                  when 10 | 13                       =>
                      State.Prompt_Shown := False;
-                  else
-                     State.Prompt :=
-                       To_Unbounded_Wide_Wide_String
-                         (Command (Command'First .. Command'Last - 1));
-                  end if;
+                     if Searching then
+                        if Length (State.Prompt) > 0 then
+                           Last_Search := State.Prompt;
+                        end if;
+                     else
+                        Run_Command (Command);
+                     end if;
 
-               when 10 | 13   =>
-                  State.Prompt_Shown := False;
-                  Run_Command (Command);
+                  when 32 .. 126 | 160 .. 16#10FFFF# =>
+                     Append (State.Prompt, Event.Letter);
+                     if Searching then
+                        Update_Search;
+                     end if;
 
-               when 32 .. 126 =>
-                  Append (State.Prompt, Event.Letter);
-
-               when others    =>
-                  null;
-            end case;
+                  when others                        =>
+                     null;
+               end case;
+            end if;
          end if;
       end Handle_Prompt;
       procedure Navigate (Day_Delta : Integer := 0; Month_Delta : Integer := 0)
@@ -893,10 +1301,185 @@ package body Diary_Controller is
             when Open_Prompt   =>
                Show_Prompt;
 
+            when Open_Settings =>
+               State.Settings_Keymap := State.Keymap;
+               State.Draft_Bindings := State.Bindings;
+               State.Settings_Page := Preset_View;
+               State.Binding_Action := Diary_Bindings.Action_Id'First;
+               State.Mode := Settings;
+               Message ("");
+
             when Quit          =>
                Finished := True;
          end case;
       end Handle_Reading;
+      procedure Handle_Settings is
+         use Diary_Bindings;
+         procedure Save_Settings is
+         begin
+            Screen.Save_Settings
+              ((State.Settings_Keymap, State.Draft_Bindings));
+            State.Keymap := State.Settings_Keymap;
+            State.Bindings := State.Draft_Bindings;
+            Binding_Pending := (others => <>);
+            State.Mode := Reading;
+            Message
+              ("Settings saved. Keymap: "
+               & Diary_Keymaps.Label (State.Keymap));
+         exception
+            when Error : others =>
+               Message
+                 ("Cannot save settings: "
+                  & Ada.Characters.Conversions.To_Wide_Wide_String
+                      (Ada.Exceptions.Exception_Message (Error)));
+         end Save_Settings;
+         procedure Advance (Forward : Boolean) is
+         begin
+            loop
+               State.Binding_Action :=
+                 Action_Id'Val
+                   ((Action_Id'Pos (State.Binding_Action)
+                     + (if Forward then 1 else Action_Id'Pos (Action_Id'Last)))
+                    mod (Action_Id'Pos (Action_Id'Last) + 1));
+               exit when
+                 Supported (State.Settings_Keymap, State.Binding_Action);
+            end loop;
+         end Advance;
+         procedure Commit_Binding (Value : Key_Sequence) is
+            Candidate : Binding_Table := State.Draft_Bindings;
+         begin
+            Candidate (State.Settings_Keymap, State.Binding_Action) := Value;
+            declare
+               Error : constant String := Validate (Candidate);
+            begin
+               if Error /= "" then
+                  Message
+                    (Ada.Characters.Conversions.To_Wide_Wide_String (Error));
+               else
+                  State.Draft_Bindings := Candidate;
+                  State.Settings_Page := Bindings_View;
+                  Message ("Binding updated (not saved yet)");
+               end if;
+            end;
+         end Commit_Binding;
+         function Letter (Value : Wide_Wide_Character) return Boolean
+         is (Event.Kind = Character_Key and then Event.Letter = Value);
+      begin
+         if State.Settings_Page = Change_View then
+            if Event.Kind = Escape_Key or else Letter (Ctrl_G) then
+               State.Settings_Page := Bindings_View;
+               Message ("Binding change cancelled");
+            elsif Event.Kind = Character_Key then
+               case Wide_Wide_Character'Pos (Event.Letter) is
+                  when 21                            =>
+                     State.Binding_Text := Null_Unbounded_Wide_Wide_String;
+
+                  when 8 | 127                       =>
+                     if Length (State.Binding_Text) > 0 then
+                        Delete
+                          (State.Binding_Text,
+                           Length (State.Binding_Text),
+                           Length (State.Binding_Text));
+                     end if;
+
+                  when 10 | 13                       =>
+                     begin
+                        Commit_Binding
+                          (Parse
+                             (Ada.Strings.UTF_Encoding.Wide_Wide_Strings.Encode
+                                (To_Wide_Wide_String (State.Binding_Text))));
+                     exception
+                        when Error : others =>
+                           Message
+                             (Ada.Characters.Conversions.To_Wide_Wide_String
+                                (Ada.Exceptions.Exception_Message (Error)));
+                     end;
+
+                  when 32 .. 126 | 160 .. 16#10FFFF# =>
+                     if Length (State.Binding_Text) < 120 then
+                        Append (State.Binding_Text, Event.Letter);
+                     end if;
+
+                  when others                        =>
+                     null;
+               end case;
+            end if;
+         elsif State.Settings_Page = Bindings_View then
+            if Event.Kind = Escape_Key then
+               State.Settings_Page := Preset_View;
+               Message ("Draft retained; Enter saves, Esc discards");
+            elsif Event.Kind = Up_Key
+              or else Letter ('k')
+              or else Letter (Ctrl_P)
+            then
+               Advance (False);
+            elsif Event.Kind = Down_Key
+              or else Letter ('j')
+              or else Letter (Ctrl_N)
+            then
+               Advance (True);
+            elsif Event.Kind in Left_Key | Right_Key then
+               State.Settings_Keymap :=
+                 (if Event.Kind = Left_Key
+                  then Diary_Keymaps.Emacs
+                  else Diary_Keymaps.Helix);
+               State.Binding_Action := Action_Id'First;
+            elsif Letter (Newline)
+              or else Letter (Wide_Wide_Character'Val (13))
+            then
+               State.Binding_Text :=
+                 Ada.Strings.UTF_Encoding.Wide_Wide_Strings.Decode
+                   (Image
+                      (State.Draft_Bindings
+                         (State.Settings_Keymap, State.Binding_Action)))
+                 & Null_Unbounded_Wide_Wide_String;
+               State.Settings_Page := Change_View;
+               Message
+                 ("Type key names; C-u clears; Enter validates; Esc cancels");
+            elsif Letter ('R') then
+               Commit_Binding
+                 (Defaults (State.Settings_Keymap, State.Binding_Action));
+            elsif Letter ('D') then
+               declare
+                  Original : constant Binding_Table := Defaults;
+               begin
+                  for Action in Action_Id loop
+                     State.Draft_Bindings (State.Settings_Keymap, Action) :=
+                       Original (State.Settings_Keymap, Action);
+                  end loop;
+                  Message ("Keymap defaults restored (not saved yet)");
+               end;
+            elsif Letter ('S') then
+               Save_Settings;
+            end if;
+         elsif Event.Kind = Escape_Key then
+            State.Mode := Reading;
+            Message ("Settings cancelled");
+         elsif Event.Kind in Left_Key | Up_Key then
+            State.Settings_Keymap := Diary_Keymaps.Emacs;
+         elsif Event.Kind in Right_Key | Down_Key then
+            State.Settings_Keymap := Diary_Keymaps.Helix;
+         elsif Event.Kind = Character_Key then
+            case Event.Letter is
+               when '1' | 'k' | 'h' | Ctrl_P               =>
+                  State.Settings_Keymap := Diary_Keymaps.Emacs;
+
+               when '2' | 'j' | 'l' | Ctrl_N               =>
+                  State.Settings_Keymap := Diary_Keymaps.Helix;
+
+               when 'b' | 'B'                              =>
+                  State.Settings_Page := Bindings_View;
+                  State.Binding_Action := Action_Id'First;
+                  Message ("Enter changes a binding; S saves all changes");
+
+               when Newline | Wide_Wide_Character'Val (13) =>
+                  Save_Settings;
+
+               when others                                 =>
+                  null;
+            end case;
+         end if;
+      end Handle_Settings;
       procedure Handle_Confirmation is
          Result : Diary_Service.Outcome;
       begin
@@ -942,11 +1525,148 @@ package body Diary_Controller is
                when Editing                          =>
                   Handle_Editor;
 
+               when Settings                         =>
+                  Handle_Settings;
+
                when Confirm_Delete | Confirm_Discard =>
                   Handle_Confirmation;
             end case;
          end if;
       end Dispatch;
+      procedure Process_Input;
+      procedure Deliver (Value : Input_Event) is
+      begin
+         Event := Value;
+         if State.Keymap = Diary_Keymaps.Helix
+           and then Event.Kind = Meta_Key
+           and then (State.Modal = Insert_Mode
+                     or else Event.Letter not in ';' | '.')
+         then
+            declare
+               Letter : constant Wide_Wide_Character := Event.Letter;
+            begin
+               Event := (Escape_Key, ' ');
+               Dispatch;
+               Event := (Character_Key, Letter);
+               Process_Input;
+            end;
+         else
+            Dispatch;
+         end if;
+      end Deliver;
+      procedure Process_Input is
+         use Diary_Bindings;
+         Context     : Input_Context;
+         Match       : Match_Kind;
+         Action      : Action_Id;
+         Alias_Found : Boolean;
+         Incoming    : Input_Event := Event;
+         Had_Prefix  : constant Boolean := Binding_Pending.Length > 0;
+      begin
+         if not Screen.Is_Usable
+           or else State.Mode not in Reading | Editing
+           or else State.Prompt_Shown
+           or else Pending_Find /= ' '
+         then
+            Binding_Pending := (others => <>);
+            Deliver (Incoming);
+            return;
+         elsif Incoming.Kind = Resize_Key then
+            Dispatch;
+            return;
+         elsif Had_Prefix
+           and then (Incoming.Kind = Escape_Key
+                     or else (Incoming.Kind = Character_Key
+                              and then Incoming.Letter = Ctrl_G))
+         then
+            Binding_Pending := (others => <>);
+            Prefix := No_Prefix;
+            Count := 0;
+            Message ("Key sequence cancelled");
+            return;
+         end if;
+         Context :=
+           (if State.Mode = Reading
+            then Calendar_Context
+            elsif State.Keymap = Diary_Keymaps.Emacs
+            then Emacs_Context
+            elsif State.Modal = Insert_Mode
+            then Helix_Insert_Context
+            else Helix_Normal_Context);
+         if not Had_Prefix
+           and then Context = Helix_Normal_Context
+           and then Incoming.Kind = Character_Key
+           and then Incoming.Letter in '0' .. '9'
+         then
+            Deliver (Incoming);
+            return;
+         end if;
+         if Incoming.Kind in Character_Key | Meta_Key
+           and then Incoming.Letter = Backspace_Key
+         then
+            Incoming.Letter := Rubout_Key;
+         elsif Incoming.Kind = Character_Key and then Incoming.Letter = Newline
+         then
+            Incoming.Letter := Wide_Wide_Character'Val (13);
+         end if;
+         if Binding_Pending.Length = Max_Keys then
+            Binding_Pending := (others => <>);
+         end if;
+         Binding_Pending.Length := Binding_Pending.Length + 1;
+         Binding_Pending.Keys (Binding_Pending.Length) := Incoming;
+         Resolve
+           (State.Bindings,
+            State.Keymap,
+            Context,
+            Binding_Pending,
+            Match,
+            Action);
+         if Match = No_Match then
+            Resolve_Alias
+              (State.Keymap, Context, Binding_Pending, Alias_Found, Action);
+            if Alias_Found then
+               Match :=
+                 (if State.Bindings (State.Keymap, Action)
+                    = Defaults (State.Keymap, Action)
+                  then Action_Match
+                  else Disabled_Match);
+            end if;
+         end if;
+         case Match is
+            when Prefix_Match   =>
+               Message
+                 ("Keys: "
+                  & Ada.Strings.UTF_Encoding.Wide_Wide_Strings.Decode
+                      (Image (Binding_Pending)));
+
+            when Action_Match   =>
+               Binding_Pending := (others => <>);
+               declare
+                  Keys : constant Key_Sequence :=
+                    Canonical (State.Keymap, Action);
+               begin
+                  for Index in 1 .. Keys.Length loop
+                     Deliver (Keys.Keys (Index));
+                  end loop;
+               end;
+
+            when Disabled_Match =>
+               Binding_Pending := (others => <>);
+               Prefix := No_Prefix;
+               Count := 0;
+               Message ("Binding changed or disabled; see S settings");
+
+            when No_Match       =>
+               Binding_Pending := (others => <>);
+               if Had_Prefix then
+                  Prefix := No_Prefix;
+                  Count := 0;
+                  Message ("Unbound key sequence");
+               else
+                  Deliver (Incoming);
+               end if;
+         end case;
+      end Process_Input;
       procedure Sync_Selection is
          Point : Natural;
       begin
@@ -974,6 +1694,7 @@ package body Diary_Controller is
       State.Selected := Today;
       State.Today := Today;
       State.Keymap := Keymap;
+      State.Bindings := Bindings;
       begin
          Refresh;
       exception
@@ -988,20 +1709,7 @@ package body Diary_Controller is
          Screen.Display (State);
          Screen.Next (Event);
          begin
-            if State.Keymap = Diary_Keymaps.Helix
-              and then Event.Kind = Meta_Key
-            then
-               declare
-                  Letter : constant Wide_Wide_Character := Event.Letter;
-               begin
-                  Event := (Escape_Key, ' ');
-                  Dispatch;
-                  Event := (Character_Key, Letter);
-                  Dispatch;
-               end;
-            else
-               Dispatch;
-            end if;
+            Process_Input;
          exception
             when Error : Diary_Repositories.Storage_Error =>
                Message

@@ -1,4 +1,5 @@
 with Diary_Controller;
+with Diary_Config;
 with Diary_Input;
 with Diary_Renderer;
 with Diary_Screen;
@@ -21,6 +22,17 @@ package body Diary_App is
    function Is_Usable (Screen : Terminal_Screen) return Boolean;
    overriding
    function Preview_Width (Screen : Terminal_Screen) return Positive;
+   overriding
+   procedure Save_Settings
+     (Screen : in out Terminal_Screen; Value : Diary_Bindings.Preferences);
+
+   procedure Save_Settings
+     (Screen : in out Terminal_Screen; Value : Diary_Bindings.Preferences)
+   is
+      pragma Unreferenced (Screen);
+   begin
+      Diary_Config.Save (Value);
+   end Save_Settings;
 
    procedure Start (Screen : in out Terminal_Screen) is
    begin
@@ -54,14 +66,15 @@ package body Diary_App is
    end Preview_Width;
 
    procedure Run
-     (Store  : in out Diary_Repositories.Repository'Class;
-      Today  : Diary_Dates.Date;
-      Keymap : Diary_Keymaps.Kind := Diary_Keymaps.Emacs)
+     (Store    : in out Diary_Repositories.Repository'Class;
+      Today    : Diary_Dates.Date;
+      Keymap   : Diary_Keymaps.Kind := Diary_Keymaps.Emacs;
+      Bindings : Diary_Bindings.Binding_Table := Diary_Bindings.Defaults)
    is
       Screen : Terminal_Screen;
    begin
       begin
-         Diary_Controller.Run (Store, Screen, Today, Keymap);
+         Diary_Controller.Run (Store, Screen, Today, Keymap, Bindings);
       exception
          when others =>
             Diary_Terminal.Stop (Screen.Session);

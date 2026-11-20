@@ -1,4 +1,5 @@
 with Diary_Input;
+with Diary_Bindings;
 with Diary_Screen_State;
 
 package Diary_Screen is
@@ -10,4 +11,7 @@ package Diary_Screen is
    is abstract;
    function Is_Usable (Screen : Port) return Boolean is abstract;
    function Preview_Width (Screen : Port) return Positive is abstract;
+   procedure Save_Settings
+     (Screen : in out Port; Value : Diary_Bindings.Preferences)
+   is abstract;
 end Diary_Screen;

@@ -19,6 +19,7 @@ is
       Scroll_Down,
       Scroll_Up,
       Switch_Keymap,
+      Open_Settings,
       Open_Prompt,
       Quit);
    function Resolve

@@ -6,6 +6,8 @@ with Ada.Exceptions;
 with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 with Diary_App;
+with Diary_Bindings;
+with Diary_Config;
 with Diary_Dates;
 with Diary_File_Repositories;
 with Diary_Keymaps;
@@ -32,6 +34,7 @@ procedure Diary is
    Directory  : Unbounded_String;
    Keymap     : Diary_Keymaps.Kind := Diary_Keymaps.Emacs;
    Keymap_Set : Boolean := False;
+   Settings   : Diary_Bindings.Preferences;
    Index      : Positive := 1;
    Store      : Diary_File_Repositories.File_Repository;
    Now        : constant Ada.Calendar.Time := Ada.Calendar.Clock;
@@ -51,13 +54,13 @@ procedure Diary is
       Ada.Text_IO.Put_Line
         ("Usage: diary [--data-dir PATH] [--keymap emacs|helix] [--help]");
       Ada.Text_IO.Put_Line
-        ("Keymap: --keymap or DIARY_KEYMAP; default emacs; M switches in the calendar.");
+        ("Keymap: --keymap > DIARY_KEYMAP > ~/.ada_tui_diary/config.toml > emacs.");
       Ada.Text_IO.Put_Line
-        ("Calendar: arrows, [/] month, T today; N new, E edit, D delete, Q quit.");
+        ("Calendar: arrows, [/] month, T today; N new, E edit, D delete, S settings, Q quit.");
       Ada.Text_IO.Put_Line
-        ("Emacs editor: Tab field, Ctrl+S save, Esc cancel, C-a/C-e, C-k, C-y, C-/.");
+        ("Emacs: C-x C-s save, C-x k close, C-s/r search, C-k kill, C-y/M-y yank, C-/ undo.");
       Ada.Text_IO.Put_Line
-        ("Helix editor: i/a/o insert, Esc normal, hjkl, w/b/e, x, d/c/y/p, u/U, :w, :q.");
+        ("Helix: i/a/o insert, Esc normal, 3w, f/t find, r replace, /? search, :w, :q.");
    end Usage;
 begin
    while Index <= Ada.Command_Line.Argument_Count loop
@@ -82,12 +85,14 @@ begin
       end if;
       Index := Index + 2;
    end loop;
-   if not Keymap_Set
-     and then Ada.Environment_Variables.Exists ("DIARY_KEYMAP")
-     and then Ada.Environment_Variables.Value ("DIARY_KEYMAP") /= ""
-   then
-      Keymap :=
-        Parse_Keymap (Ada.Environment_Variables.Value ("DIARY_KEYMAP"));
+   Settings := Diary_Config.Load_Settings;
+   if not Keymap_Set then
+      if Ada.Environment_Variables.Value ("DIARY_KEYMAP", "") /= "" then
+         Keymap :=
+           Parse_Keymap (Ada.Environment_Variables.Value ("DIARY_KEYMAP"));
+      else
+         Keymap := Settings.Keymap;
+      end if;
    end if;
    if Length (Directory) = 0 then
       Directory := To_Unbounded_String (Default_Directory);
@@ -99,7 +104,8 @@ begin
         (Ada.Calendar.Year (Now),
          Ada.Calendar.Month (Now),
          Ada.Calendar.Day (Now)),
-      Keymap);
+      Keymap,
+      Settings.Bindings);
    Diary_File_Repositories.Close (Store);
 exception
    when Error : others =>
